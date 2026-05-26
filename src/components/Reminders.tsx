@@ -4,34 +4,68 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
-import { Bell, BellRing, Trash2, Plus, Volume2 } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Bell, BellRing, Trash2, Plus, Volume2, Upload } from "lucide-react";
 import { toast } from "sonner";
+
+type SoundId = "tick" | "beep" | "alarm" | string; // string = custom:<id>
+
+type CustomSound = {
+  id: string; // custom:xxx
+  name: string;
+  dataUrl: string;
+};
 
 type Reminder = {
   id: string;
   label: string;
   time: string; // "HH:MM"
   enabled: boolean;
-  alarm: boolean; // true = long ringing alarm; false = single beep
-  lastFired?: string; // YYYY-MM-DD|HH:MM
+  sound: SoundId; // tick / beep / alarm / custom:<id>
+  lastFired?: string;
 };
 
-const STORAGE_KEY = "habit_reminders_v1";
+const STORAGE_KEY = "habit_reminders_v2";
+const SOUNDS_KEY = "habit_custom_sounds_v1";
 
 function loadReminders(): Reminder[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Reminder[]) : [];
+    if (raw) return JSON.parse(raw) as Reminder[];
+    // migrate from v1
+    const old = localStorage.getItem("habit_reminders_v1");
+    if (old) {
+      const arr = JSON.parse(old) as any[];
+      return arr.map((r) => ({
+        id: r.id,
+        label: r.label,
+        time: r.time,
+        enabled: r.enabled,
+        sound: r.alarm ? "alarm" : "tick",
+        lastFired: r.lastFired,
+      }));
+    }
+    return [];
   } catch {
     return [];
   }
 }
-
 function saveReminders(rs: Reminder[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(rs));
 }
+function loadCustomSounds(): CustomSound[] {
+  try {
+    const raw = localStorage.getItem(SOUNDS_KEY);
+    return raw ? (JSON.parse(raw) as CustomSound[]) : [];
+  } catch {
+    return [];
+  }
+}
+function saveCustomSounds(s: CustomSound[]) {
+  localStorage.setItem(SOUNDS_KEY, JSON.stringify(s));
+}
 
-// Web Audio: digital watch style beep
+// Web Audio
 let audioCtx: AudioContext | null = null;
 function getCtx() {
   if (!audioCtx) {
@@ -42,7 +76,40 @@ function getCtx() {
   return audioCtx;
 }
 
-export function playBeep(times = 1) {
+// Single tick (digital watch click)
+function tickOnce(ctx: AudioContext, at: number, freq = 2800) {
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = "square";
+  osc.frequency.setValueAtTime(freq, at);
+  gain.gain.setValueAtTime(0, at);
+  gain.gain.linearRampToValueAtTime(0.22, at + 0.002);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.04);
+  osc.connect(gain).connect(ctx.destination);
+  osc.start(at);
+  osc.stop(at + 0.05);
+}
+
+// Tick-tock pattern (digital watch: tik..tok..tik..tok)
+let tickStop: (() => void) | null = null;
+export function playTickTock(seconds = 8) {
+  stopAll();
+  const ctx = getCtx();
+  const start = ctx.currentTime;
+  const end = start + seconds;
+  let t = start;
+  let high = true;
+  const oscs: number[] = [];
+  while (t < end) {
+    tickOnce(ctx, t, high ? 3000 : 2200); // tik (high) / tok (low)
+    high = !high;
+    t += 0.5;
+  }
+  const cleared = false;
+  tickStop = () => { /* tones already scheduled stop themselves quickly */ void oscs; void cleared; };
+}
+
+export function playBeep(times = 2) {
   const ctx = getCtx();
   const now = ctx.currentTime;
   for (let i = 0; i < times; i++) {
@@ -62,13 +129,12 @@ export function playBeep(times = 1) {
 
 let alarmStop: (() => void) | null = null;
 export function playAlarm(seconds = 20) {
-  stopAlarm();
+  stopAll();
   const ctx = getCtx();
   const start = ctx.currentTime;
   const end = start + seconds;
-  // pattern: 3 quick beeps every 1s
-  let t = start;
   const oscs: OscillatorNode[] = [];
+  let t = start;
   while (t < end) {
     for (let i = 0; i < 3; i++) {
       const tt = t + i * 0.15;
@@ -87,42 +153,54 @@ export function playAlarm(seconds = 20) {
     t += 1;
   }
   alarmStop = () => {
-    oscs.forEach((o) => {
-      try { o.stop(); } catch {}
-    });
+    oscs.forEach((o) => { try { o.stop(); } catch {} });
     alarmStop = null;
   };
 }
 
-export function stopAlarm() {
+let customAudio: HTMLAudioElement | null = null;
+export function playCustom(dataUrl: string) {
+  stopAll();
+  try {
+    customAudio = new Audio(dataUrl);
+    customAudio.loop = false;
+    customAudio.play().catch(() => {});
+  } catch {}
+}
+
+export function stopAll() {
   if (alarmStop) alarmStop();
+  if (tickStop) tickStop();
+  if (customAudio) { try { customAudio.pause(); customAudio.currentTime = 0; } catch {} customAudio = null; }
 }
 
 export function RemindersButton() {
   const [open, setOpen] = useState(false);
   const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [customSounds, setCustomSounds] = useState<CustomSound[]>([]);
   const [label, setLabel] = useState("");
   const [time, setTime] = useState("09:00");
-  const [alarm, setAlarm] = useState(false);
+  const [sound, setSound] = useState<SoundId>("tick");
   const [ringing, setRinging] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const remindersRef = useRef<Reminder[]>([]);
+  const soundsRef = useRef<CustomSound[]>([]);
 
   useEffect(() => {
     const r = loadReminders();
     setReminders(r);
     remindersRef.current = r;
-    // request notification permission once
+    const cs = loadCustomSounds();
+    setCustomSounds(cs);
+    soundsRef.current = cs;
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
     }
   }, []);
 
-  useEffect(() => {
-    remindersRef.current = reminders;
-    saveReminders(reminders);
-  }, [reminders]);
+  useEffect(() => { remindersRef.current = reminders; saveReminders(reminders); }, [reminders]);
+  useEffect(() => { soundsRef.current = customSounds; saveCustomSounds(customSounds); }, [customSounds]);
 
-  // Tick every 15s; fire when current HH:MM matches and not already fired this minute
   useEffect(() => {
     const tick = () => {
       const now = new Date();
@@ -147,19 +225,23 @@ export function RemindersButton() {
 
   const fireReminder = (r: Reminder) => {
     try {
-      if (r.alarm) {
+      if (r.sound === "alarm") {
         playAlarm(25);
         setRinging(r.id);
-      } else {
-        playBeep(2);
+      } else if (r.sound === "beep") {
+        playBeep(3);
+      } else if (r.sound === "tick") {
+        playTickTock(6);
+      } else if (r.sound.startsWith("custom:")) {
+        const cs = soundsRef.current.find((s) => s.id === r.sound);
+        if (cs) playCustom(cs.dataUrl);
+        else playTickTock(4);
       }
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification("Habit Reminder", { body: r.label || r.time, icon: "/app-icon.png" });
       }
       toast(`⏰ ${r.label || "Reminder"} — ${r.time}`);
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
   };
 
   const add = () => {
@@ -169,7 +251,7 @@ export function RemindersButton() {
       label: label.trim(),
       time,
       enabled: true,
-      alarm,
+      sound,
     };
     setReminders((p) => [...p, r]);
     setLabel("");
@@ -178,19 +260,42 @@ export function RemindersButton() {
 
   const toggle = (id: string) =>
     setReminders((p) => p.map((r) => (r.id === id ? { ...r, enabled: !r.enabled } : r)));
-
   const remove = (id: string) => setReminders((p) => p.filter((r) => r.id !== id));
 
-  const testSound = () => {
-    getCtx(); // unlock on user gesture
-    playBeep(3);
-    toast.success("Beep test");
+  const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!f.type.startsWith("audio/")) return toast.error("Sirf audio file");
+    if (f.size > 1024 * 1024 * 2) return toast.error("Max 2MB");
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      const cs: CustomSound = { id: `custom:${crypto.randomUUID()}`, name: f.name.replace(/\.[^.]+$/, ""), dataUrl };
+      setCustomSounds((p) => [...p, cs]);
+      setSound(cs.id);
+      toast.success(`Sound add hua: ${cs.name}`);
+    };
+    reader.readAsDataURL(f);
+    if (fileRef.current) fileRef.current.value = "";
   };
 
-  const stopRing = () => {
-    stopAlarm();
-    setRinging(null);
+  const removeSound = (id: string) => {
+    setCustomSounds((p) => p.filter((s) => s.id !== id));
+    if (sound === id) setSound("tick");
   };
+
+  const testCurrent = () => {
+    getCtx();
+    if (sound === "tick") playTickTock(3);
+    else if (sound === "beep") playBeep(2);
+    else if (sound === "alarm") playAlarm(3);
+    else {
+      const cs = customSounds.find((s) => s.id === sound);
+      if (cs) playCustom(cs.dataUrl);
+    }
+  };
+
+  const stopRing = () => { stopAll(); setRinging(null); };
 
   return (
     <>
@@ -217,20 +322,56 @@ export function RemindersButton() {
               <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="e.g. Morning workout" />
               <div className="flex items-center gap-2">
                 <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="flex-1" />
-                <label className="flex items-center gap-1 text-xs text-slate-600">
-                  <Switch checked={alarm} onCheckedChange={setAlarm} /> Alarm
-                </label>
               </div>
-              <div className="flex gap-2">
-                <Button onClick={add} className="flex-1 bg-blue-600 hover:bg-blue-700">
-                  <Plus className="h-4 w-4 mr-1" /> Add
-                </Button>
-                <Button variant="outline" onClick={testSound} title="Test beep">
+
+              <div className="flex items-center gap-2">
+                <Select value={sound} onValueChange={(v) => setSound(v)}>
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Sound" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-white">
+                    <SelectItem value="tick">⏱ Tick-Tock (digital watch)</SelectItem>
+                    <SelectItem value="beep">🔔 Beep</SelectItem>
+                    <SelectItem value="alarm">🚨 Alarm (long ring)</SelectItem>
+                    {customSounds.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>🎵 {s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button variant="outline" size="icon" onClick={testCurrent} title="Test sound">
                   <Volume2 className="h-4 w-4" />
                 </Button>
               </div>
+
+              <div className="flex items-center gap-2">
+                <input ref={fileRef} type="file" accept="audio/*" onChange={onUpload} className="hidden" />
+                <Button variant="outline" size="sm" className="flex-1" onClick={() => fileRef.current?.click()}>
+                  <Upload className="h-3.5 w-3.5 mr-1" /> Custom sound add karo
+                </Button>
+                <Button onClick={add} className="flex-1 bg-blue-600 hover:bg-blue-700">
+                  <Plus className="h-4 w-4 mr-1" /> Add reminder
+                </Button>
+              </div>
+
+              {customSounds.length > 0 && (
+                <div className="pt-1 space-y-1">
+                  <div className="text-[11px] text-slate-500">Aapke sounds:</div>
+                  {customSounds.map((s) => (
+                    <div key={s.id} className="flex items-center gap-2 text-xs">
+                      <span className="flex-1 truncate text-slate-700">🎵 {s.name}</span>
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { getCtx(); playCustom(s.dataUrl); }}>
+                        <Volume2 className="h-3 w-3" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-red-500" onClick={() => removeSound(s.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <p className="text-[11px] text-slate-400">
-                Note: App khula rehna chahiye (ya home-screen pe installed) taaki alarm time pe baje.
+                Note: App khula rehna chahiye (ya home-screen pe installed) taaki sound time pe baje.
               </p>
             </div>
 
@@ -238,21 +379,28 @@ export function RemindersButton() {
               {reminders.length === 0 ? (
                 <div className="text-center text-sm text-slate-500 py-6">Abhi koi reminder nahi.</div>
               ) : (
-                reminders.map((r) => (
-                  <div key={r.id} className="flex items-center gap-2 p-2 rounded-md border border-slate-200 bg-white">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-slate-900 truncate text-sm">{r.label}</div>
-                      <div className="text-xs text-slate-500 flex items-center gap-2">
-                        <span className="font-mono">{r.time}</span>
-                        {r.alarm && <span className="px-1.5 py-0.5 rounded bg-orange-50 text-orange-600 text-[10px] font-semibold">ALARM</span>}
+                reminders.map((r) => {
+                  const soundLabel =
+                    r.sound === "tick" ? "Tick-Tock" :
+                    r.sound === "beep" ? "Beep" :
+                    r.sound === "alarm" ? "Alarm" :
+                    customSounds.find((s) => s.id === r.sound)?.name || "Custom";
+                  return (
+                    <div key={r.id} className="flex items-center gap-2 p-2 rounded-md border border-slate-200 bg-white">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-slate-900 truncate text-sm">{r.label}</div>
+                        <div className="text-xs text-slate-500 flex items-center gap-2">
+                          <span className="font-mono">{r.time}</span>
+                          <span className="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 text-[10px] font-semibold">{soundLabel}</span>
+                        </div>
                       </div>
+                      <Switch checked={r.enabled} onCheckedChange={() => toggle(r.id)} />
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-600" onClick={() => remove(r.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
-                    <Switch checked={r.enabled} onCheckedChange={() => toggle(r.id)} />
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-600" onClick={() => remove(r.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
