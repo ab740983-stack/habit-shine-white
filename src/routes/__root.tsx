@@ -74,14 +74,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Lovable App" },
-      { name: "description", content: "Lovable Generated Project" },
+      { title: "DOMINATE DAILY" },
+      { name: "description", content: "“Small daily actions create big future results. Stay consistent, stay disciplined, and track every step towards your goals.” 🚀" },
       { name: "author", content: "Lovable" },
-      { property: "og:title", content: "Lovable App" },
-      { property: "og:description", content: "Lovable Generated Project" },
+      { property: "og:title", content: "DOMINATE DAILY" },
+      { property: "og:description", content: "“Small daily actions create big future results. Stay consistent, stay disciplined, and track every step towards your goals.” 🚀" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
       { name: "twitter:site", content: "@Lovable" },
+      { name: "twitter:title", content: "DOMINATE DAILY" },
+      { name: "twitter:description", content: "“Small daily actions create big future results. Stay consistent, stay disciplined, and track every step towards your goals.” 🚀" },
+      { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/58266a97-308f-4f7e-960c-bfa5e752ed6f/id-preview-9e2b708d--3abd1371-1ac4-4b39-b1b8-5ce82925879c.lovable.app-1779803571779.png" },
+      { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/58266a97-308f-4f7e-960c-bfa5e752ed6f/id-preview-9e2b708d--3abd1371-1ac4-4b39-b1b8-5ce82925879c.lovable.app-1779803571779.png" },
     ],
     links: [
       {
