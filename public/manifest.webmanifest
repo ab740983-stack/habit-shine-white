@@ -1,0 +1,14 @@
+{
+  "name": "Dominate Daily - Habit Tracker",
+  "short_name": "Dominate Daily",
+  "description": "Track your habits every day and dominate your goals.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/app-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/app-icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -49,13 +49,14 @@ function AuthPage() {
         </div>
 
         <Tabs defaultValue="email">
-          <TabsList className="grid grid-cols-2 w-full">
+          <TabsList className="grid grid-cols-1 w-full">
             <TabsTrigger value="email">Email</TabsTrigger>
-            <TabsTrigger value="phone">Phone</TabsTrigger>
           </TabsList>
           <TabsContent value="email"><EmailAuth /></TabsContent>
-          <TabsContent value="phone"><PhoneAuth /></TabsContent>
         </Tabs>
+        <p className="text-xs text-slate-400 text-center mt-4">
+          Phone OTP login coming soon — for now use Google or Email to sign in securely.
+        </p>
       </Card>
     </div>
   );
