@@ -113,9 +113,12 @@ function Index() {
               <p className="text-xs text-slate-500 hidden sm:block">{user.email ?? user.phone}</p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
-            <LogOut className="h-4 w-4 mr-1" /> Sign out
-          </Button>
+          <div className="flex items-center gap-1">
+            <RemindersButton />
+            <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
+              <LogOut className="h-4 w-4 mr-1" /> <span className="hidden sm:inline">Sign out</span>
+            </Button>
+          </div>
         </div>
       </header>
 
