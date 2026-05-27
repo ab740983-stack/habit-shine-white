@@ -401,6 +401,7 @@ export function RemindersButton() {
                     <SelectValue placeholder="Sound" />
                   </SelectTrigger>
                   <SelectContent className="bg-white">
+                    <SelectItem value="digital">⏰ Digital Alarm Clock (recommended)</SelectItem>
                     <SelectItem value="tick">⏱ Tick-Tock (digital watch)</SelectItem>
                     <SelectItem value="beep">🔔 Beep</SelectItem>
                     <SelectItem value="alarm">🚨 Alarm (long ring)</SelectItem>
