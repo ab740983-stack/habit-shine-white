@@ -275,9 +275,12 @@ export function RemindersButton() {
       });
       if (changed) setReminders(updated);
     };
-    const id = setInterval(tick, 15000);
+    const id = setInterval(tick, 5000);
     tick();
-    return () => clearInterval(id);
+    const onVis = () => { if (document.visibilityState === "visible") tick(); };
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(id); document.removeEventListener("visibilitychange", onVis); };
+
   }, []);
 
   const fireReminder = (r: Reminder) => {
