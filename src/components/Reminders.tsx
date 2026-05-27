@@ -8,7 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Bell, BellRing, Trash2, Plus, Volume2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
-type SoundId = "tick" | "beep" | "alarm" | string; // string = custom:<id>
+const DIGITAL_ALARM_URL = "/sounds/digital-alarm.mp3";
+
+type SoundId = "tick" | "beep" | "alarm" | "digital" | string; // string = custom:<id>
 
 type CustomSound = {
   id: string; // custom:xxx
@@ -192,16 +194,21 @@ export function playAlarm(seconds = 20) {
 }
 
 let customAudio: HTMLAudioElement | null = null;
-export function playCustom(dataUrl: string) {
+export function playCustom(dataUrl: string, loop = false) {
   stopAll();
   try {
     customAudio = new Audio(dataUrl);
-    customAudio.loop = false;
+    customAudio.loop = loop;
     customAudio.volume = 1;
     const p = customAudio.play();
     if (p && typeof p.catch === "function") p.catch(() => {});
-    tryVibrate([200, 100, 200]);
+    tryVibrate([400, 200, 400, 200, 400]);
   } catch {}
+}
+
+export function playDigitalAlarm(seconds = 20) {
+  playCustom(DIGITAL_ALARM_URL, true);
+  setTimeout(() => { if (customAudio) { try { customAudio.pause(); } catch {} customAudio = null; } }, seconds * 1000);
 }
 
 export function stopAll() {
@@ -217,7 +224,7 @@ export function RemindersButton() {
   const [customSounds, setCustomSounds] = useState<CustomSound[]>([]);
   const [label, setLabel] = useState("");
   const [time, setTime] = useState("09:00");
-  const [sound, setSound] = useState<SoundId>("tick");
+  const [sound, setSound] = useState<SoundId>("digital");
   const [ringing, setRinging] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const remindersRef = useRef<Reminder[]>([]);
@@ -288,6 +295,9 @@ export function RemindersButton() {
       if (r.sound === "alarm") {
         playAlarm(25);
         setRinging(r.id);
+      } else if (r.sound === "digital") {
+        playDigitalAlarm(25);
+        setRinging(r.id);
       } else if (r.sound === "beep") {
         playBeep(3);
       } else if (r.sound === "tick") {
@@ -349,6 +359,7 @@ export function RemindersButton() {
     if (sound === "tick") playTickTock(3);
     else if (sound === "beep") playBeep(2);
     else if (sound === "alarm") playAlarm(3);
+    else if (sound === "digital") playDigitalAlarm(4);
     else {
       const cs = customSounds.find((s) => s.id === sound);
       if (cs) playCustom(cs.dataUrl);
@@ -390,6 +401,7 @@ export function RemindersButton() {
                     <SelectValue placeholder="Sound" />
                   </SelectTrigger>
                   <SelectContent className="bg-white">
+                    <SelectItem value="digital">⏰ Digital Alarm Clock (recommended)</SelectItem>
                     <SelectItem value="tick">⏱ Tick-Tock (digital watch)</SelectItem>
                     <SelectItem value="beep">🔔 Beep</SelectItem>
                     <SelectItem value="alarm">🚨 Alarm (long ring)</SelectItem>
@@ -444,6 +456,7 @@ export function RemindersButton() {
                     r.sound === "tick" ? "Tick-Tock" :
                     r.sound === "beep" ? "Beep" :
                     r.sound === "alarm" ? "Alarm" :
+                    r.sound === "digital" ? "Digital Alarm" :
                     customSounds.find((s) => s.id === r.sound)?.name || "Custom";
                   return (
                     <div key={r.id} className="flex items-center gap-2 p-2 rounded-md border border-slate-200 bg-white">
