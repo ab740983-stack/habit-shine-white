@@ -224,7 +224,7 @@ export function RemindersButton() {
   const [customSounds, setCustomSounds] = useState<CustomSound[]>([]);
   const [label, setLabel] = useState("");
   const [time, setTime] = useState("09:00");
-  const [sound, setSound] = useState<SoundId>("tick");
+  const [sound, setSound] = useState<SoundId>("digital");
   const [ringing, setRinging] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const remindersRef = useRef<Reminder[]>([]);
