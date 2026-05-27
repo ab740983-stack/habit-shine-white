@@ -233,7 +233,27 @@ export function RemindersButton() {
     if ("Notification" in window && Notification.permission === "default") {
       Notification.requestPermission().catch(() => {});
     }
+    // Global one-time unlock — first tap/click anywhere unlocks audio for the session.
+    // This is REQUIRED on mobile Chrome / iOS Safari, otherwise no sound will ever play.
+    const unlock = () => {
+      unlockAudio();
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("touchend", unlock);
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+    window.addEventListener("touchstart", unlock, { passive: true });
+    window.addEventListener("touchend", unlock, { passive: true });
+    window.addEventListener("click", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("touchstart", unlock);
+      window.removeEventListener("touchend", unlock);
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
   }, []);
+
 
   useEffect(() => { remindersRef.current = reminders; saveReminders(reminders); }, [reminders]);
   useEffect(() => { soundsRef.current = customSounds; saveCustomSounds(customSounds); }, [customSounds]);
