@@ -456,6 +456,7 @@ export function RemindersButton() {
                     r.sound === "tick" ? "Tick-Tock" :
                     r.sound === "beep" ? "Beep" :
                     r.sound === "alarm" ? "Alarm" :
+                    r.sound === "digital" ? "Digital Alarm" :
                     customSounds.find((s) => s.id === r.sound)?.name || "Custom";
                   return (
                     <div key={r.id} className="flex items-center gap-2 p-2 rounded-md border border-slate-200 bg-white">
