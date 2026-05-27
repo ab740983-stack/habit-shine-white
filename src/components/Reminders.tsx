@@ -194,16 +194,21 @@ export function playAlarm(seconds = 20) {
 }
 
 let customAudio: HTMLAudioElement | null = null;
-export function playCustom(dataUrl: string) {
+export function playCustom(dataUrl: string, loop = false) {
   stopAll();
   try {
     customAudio = new Audio(dataUrl);
-    customAudio.loop = false;
+    customAudio.loop = loop;
     customAudio.volume = 1;
     const p = customAudio.play();
     if (p && typeof p.catch === "function") p.catch(() => {});
-    tryVibrate([200, 100, 200]);
+    tryVibrate([400, 200, 400, 200, 400]);
   } catch {}
+}
+
+export function playDigitalAlarm(seconds = 20) {
+  playCustom(DIGITAL_ALARM_URL, true);
+  setTimeout(() => { if (customAudio) { try { customAudio.pause(); } catch {} customAudio = null; } }, seconds * 1000);
 }
 
 export function stopAll() {
