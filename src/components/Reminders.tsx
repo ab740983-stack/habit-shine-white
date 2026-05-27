@@ -8,7 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Bell, BellRing, Trash2, Plus, Volume2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
-type SoundId = "tick" | "beep" | "alarm" | string; // string = custom:<id>
+const DIGITAL_ALARM_URL = "/sounds/digital-alarm.mp3";
+
+type SoundId = "tick" | "beep" | "alarm" | "digital" | string; // string = custom:<id>
 
 type CustomSound = {
   id: string; // custom:xxx
