@@ -65,95 +65,128 @@ function saveCustomSounds(s: CustomSound[]) {
   localStorage.setItem(SOUNDS_KEY, JSON.stringify(s));
 }
 
-// Web Audio
+// Web Audio — singleton context
 let audioCtx: AudioContext | null = null;
-function getCtx() {
-  if (!audioCtx) {
-    const AC = (window.AudioContext || (window as any).webkitAudioContext);
-    audioCtx = new AC();
-  }
-  if (audioCtx.state === "suspended") audioCtx.resume();
-  return audioCtx;
+let audioUnlocked = false;
+function getCtx(): AudioContext | null {
+  try {
+    if (!audioCtx) {
+      const AC = (window.AudioContext || (window as any).webkitAudioContext);
+      if (!AC) return null;
+      audioCtx = new AC();
+    }
+    if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+    return audioCtx;
+  } catch { return null; }
 }
 
-// Single tick (digital watch click)
-function tickOnce(ctx: AudioContext, at: number, freq = 2800) {
+// Unlock audio on first user gesture — required on iOS Safari & most mobile browsers.
+// Without this, NO sound plays from timers/intervals on phones.
+export function unlockAudio() {
+  if (audioUnlocked) return;
+  const ctx = getCtx();
+  if (!ctx) return;
+  try {
+    const buf = ctx.createBuffer(1, 1, 22050);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+    const a = new Audio(
+      "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA="
+    );
+    a.play().catch(() => {});
+    audioUnlocked = true;
+  } catch {}
+}
+
+function tryVibrate(pattern: number | number[]) {
+  try { (navigator as any).vibrate?.(pattern); } catch {}
+}
+
+// Lower frequencies (800-1400Hz) are MUCH louder on phone speakers than 2000-3000Hz.
+function tickOnce(ctx: AudioContext, at: number, freq = 1200) {
   const osc = ctx.createOscillator();
   const gain = ctx.createGain();
   osc.type = "square";
   osc.frequency.setValueAtTime(freq, at);
   gain.gain.setValueAtTime(0, at);
-  gain.gain.linearRampToValueAtTime(0.22, at + 0.002);
-  gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.04);
+  gain.gain.linearRampToValueAtTime(0.5, at + 0.003);
+  gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.07);
   osc.connect(gain).connect(ctx.destination);
   osc.start(at);
-  osc.stop(at + 0.05);
+  osc.stop(at + 0.09);
 }
 
-// Tick-tock pattern (digital watch: tik..tok..tik..tok)
 let tickStop: (() => void) | null = null;
 export function playTickTock(seconds = 8) {
   stopAll();
   const ctx = getCtx();
+  if (!ctx) return;
   const start = ctx.currentTime;
   const end = start + seconds;
   let t = start;
   let high = true;
-  const oscs: number[] = [];
   while (t < end) {
-    tickOnce(ctx, t, high ? 3000 : 2200); // tik (high) / tok (low)
+    tickOnce(ctx, t, high ? 1400 : 900);
     high = !high;
     t += 0.5;
   }
-  const cleared = false;
-  tickStop = () => { /* tones already scheduled stop themselves quickly */ void oscs; void cleared; };
+  tryVibrate([80, 420, 80, 420, 80]);
+  tickStop = () => {};
 }
 
-export function playBeep(times = 2) {
+export function playBeep(times = 3) {
   const ctx = getCtx();
+  if (!ctx) return;
   const now = ctx.currentTime;
   for (let i = 0; i < times; i++) {
-    const t = now + i * 0.18;
+    const t = now + i * 0.22;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.type = "square";
-    osc.frequency.setValueAtTime(2000, t);
+    osc.frequency.setValueAtTime(1000, t);
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.25, t + 0.005);
-    gain.gain.linearRampToValueAtTime(0, t + 0.12);
+    gain.gain.linearRampToValueAtTime(0.55, t + 0.005);
+    gain.gain.linearRampToValueAtTime(0, t + 0.15);
     osc.connect(gain).connect(ctx.destination);
     osc.start(t);
-    osc.stop(t + 0.13);
+    osc.stop(t + 0.16);
   }
+  tryVibrate([150, 100, 150]);
 }
 
 let alarmStop: (() => void) | null = null;
 export function playAlarm(seconds = 20) {
   stopAll();
   const ctx = getCtx();
+  if (!ctx) return;
   const start = ctx.currentTime;
   const end = start + seconds;
   const oscs: OscillatorNode[] = [];
   let t = start;
   while (t < end) {
     for (let i = 0; i < 3; i++) {
-      const tt = t + i * 0.15;
+      const tt = t + i * 0.18;
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.type = "square";
-      osc.frequency.setValueAtTime(2200, tt);
+      osc.frequency.setValueAtTime(1100, tt);
       gain.gain.setValueAtTime(0, tt);
-      gain.gain.linearRampToValueAtTime(0.3, tt + 0.005);
-      gain.gain.linearRampToValueAtTime(0, tt + 0.12);
+      gain.gain.linearRampToValueAtTime(0.6, tt + 0.005);
+      gain.gain.linearRampToValueAtTime(0, tt + 0.15);
       osc.connect(gain).connect(ctx.destination);
       osc.start(tt);
-      osc.stop(tt + 0.13);
+      osc.stop(tt + 0.16);
       oscs.push(osc);
     }
     t += 1;
   }
+  // Long vibration as fallback (Android — works even if speaker volume is low)
+  tryVibrate([500, 200, 500, 200, 500, 200, 500, 200, 500]);
   alarmStop = () => {
     oscs.forEach((o) => { try { o.stop(); } catch {} });
+    try { (navigator as any).vibrate?.(0); } catch {}
     alarmStop = null;
   };
 }
@@ -164,7 +197,10 @@ export function playCustom(dataUrl: string) {
   try {
     customAudio = new Audio(dataUrl);
     customAudio.loop = false;
-    customAudio.play().catch(() => {});
+    customAudio.volume = 1;
+    const p = customAudio.play();
+    if (p && typeof p.catch === "function") p.catch(() => {});
+    tryVibrate([200, 100, 200]);
   } catch {}
 }
 
@@ -172,6 +208,7 @@ export function stopAll() {
   if (alarmStop) alarmStop();
   if (tickStop) tickStop();
   if (customAudio) { try { customAudio.pause(); customAudio.currentTime = 0; } catch {} customAudio = null; }
+  try { (navigator as any).vibrate?.(0); } catch {}
 }
 
 export function RemindersButton() {
