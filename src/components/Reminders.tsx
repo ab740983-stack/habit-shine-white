@@ -295,6 +295,9 @@ export function RemindersButton() {
       if (r.sound === "alarm") {
         playAlarm(25);
         setRinging(r.id);
+      } else if (r.sound === "digital") {
+        playDigitalAlarm(25);
+        setRinging(r.id);
       } else if (r.sound === "beep") {
         playBeep(3);
       } else if (r.sound === "tick") {
