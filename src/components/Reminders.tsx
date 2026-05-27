@@ -359,6 +359,7 @@ export function RemindersButton() {
     if (sound === "tick") playTickTock(3);
     else if (sound === "beep") playBeep(2);
     else if (sound === "alarm") playAlarm(3);
+    else if (sound === "digital") playDigitalAlarm(4);
     else {
       const cs = customSounds.find((s) => s.id === sound);
       if (cs) playCustom(cs.dataUrl);
