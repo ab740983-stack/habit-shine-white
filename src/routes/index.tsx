@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, LogOut, Trash2, ChevronLeft, ChevronRight, Target, TrendingUp, Flame, CheckCircle2 } from "lucide-react";
+import { Plus, LogOut, Trash2, ChevronLeft, ChevronRight, Target, TrendingUp, Flame, CheckCircle2, Check, Archive, RotateCcw, Cloud } from "lucide-react";
 import { RemindersButton } from "@/components/Reminders";
 
 export const Route = createFileRoute("/")({ component: Index });
