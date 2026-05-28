@@ -31,8 +31,12 @@ function Index() {
   const [month, setMonth] = useState(today.getMonth());
 
   const [habits, setHabits] = useState<Habit[]>([]);
+  const [archivedHabits, setArchivedHabits] = useState<Habit[]>([]);
   const [completions, setCompletions] = useState<Completion[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+
+  const markSaved = () => setSavedAt(new Date());
 
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const days = useMemo(() => Array.from({ length: daysInMonth }, (_, i) => i + 1), [daysInMonth]);
@@ -44,13 +48,16 @@ function Index() {
     if (!user) return;
     (async () => {
       setLoadingData(true);
-      const [{ data: h }, { data: c }] = await Promise.all([
+      const [{ data: h }, { data: ah }, { data: c }] = await Promise.all([
         supabase.from("habits").select("*").eq("archived", false).order("created_at"),
+        supabase.from("habits").select("*").eq("archived", true).order("created_at"),
         supabase.from("habit_completions").select("habit_id,date").gte("date", monthStart).lte("date", monthEnd),
       ]);
       setHabits((h ?? []) as Habit[]);
+      setArchivedHabits((ah ?? []) as Habit[]);
       setCompletions((c ?? []) as Completion[]);
       setLoadingData(false);
+      markSaved();
     })();
   }, [user, monthStart, monthEnd]);
 
@@ -66,22 +73,47 @@ function Index() {
     } else {
       setCompletions((p) => [...p, { habit_id: hid, date }]);
       const { error } = await supabase.from("habit_completions").insert({ habit_id: hid, date, user_id: user!.id, completed: true });
-      if (error) { toast.error(error.message); setCompletions((p) => p.filter((c) => !(c.habit_id === hid && c.date === date))); }
+      if (error) { toast.error(error.message); setCompletions((p) => p.filter((c) => !(c.habit_id === hid && c.date === date))); return; }
     }
+    markSaved();
   };
 
   const addHabit = async (name: string, category: string, color: string, monthGoal: number) => {
     const { data, error } = await supabase.from("habits").insert({ name, category, color, month_goal: monthGoal, user_id: user!.id }).select().single();
     if (error) return toast.error(error.message);
     setHabits((p) => [...p, data as Habit]);
-    toast.success("Habit added");
+    markSaved();
+    toast.success("Habit added & saved");
   };
 
-  const deleteHabit = async (id: string) => {
-    if (!confirm("Delete this habit and its history?")) return;
-    setHabits((p) => p.filter((h) => h.id !== id));
+  // Soft delete -> archive (data stays saved, visible in Trash)
+  const archiveHabit = async (id: string) => {
+    const h = habits.find((x) => x.id === id);
+    if (!h) return;
+    setHabits((p) => p.filter((x) => x.id !== id));
+    setArchivedHabits((p) => [...p, { ...h, archived: true }]);
+    const { error } = await supabase.from("habits").update({ archived: true }).eq("id", id);
+    if (error) { toast.error(error.message); return; }
+    markSaved();
+    toast.success("Moved to Trash — data is still saved");
+  };
+
+  const restoreHabit = async (id: string) => {
+    const h = archivedHabits.find((x) => x.id === id);
+    if (!h) return;
+    setArchivedHabits((p) => p.filter((x) => x.id !== id));
+    setHabits((p) => [...p, { ...h, archived: false }]);
+    await supabase.from("habits").update({ archived: false }).eq("id", id);
+    markSaved();
+    toast.success("Restored");
+  };
+
+  const permanentDelete = async (id: string) => {
+    if (!confirm("Permanently delete this habit and ALL its history? This cannot be undone.")) return;
+    setArchivedHabits((p) => p.filter((x) => x.id !== id));
     await supabase.from("habits").delete().eq("id", id);
-    toast.success("Deleted");
+    markSaved();
+    toast.success("Permanently deleted");
   };
 
   const changeMonth = (delta: number) => {
