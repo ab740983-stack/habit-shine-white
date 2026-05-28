@@ -199,10 +199,11 @@ function Index() {
           })}
         </div>
 
-        {/* Habit grid */}
+        {/* Habit grid — vertical: dates as rows, habits as columns */}
         <Card className="bg-white border-slate-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+          <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
             <h2 className="font-semibold text-slate-900">Daily Habits — {MONTHS[month]} {year}</h2>
+            <span className="text-xs text-slate-500">{habits.length} active{archivedHabits.length > 0 && ` · ${archivedHabits.length} in trash`}</span>
           </div>
           {loadingData ? (
             <div className="p-8 text-center text-slate-500 text-sm">Loading…</div>
@@ -213,69 +214,129 @@ function Index() {
               <AddHabitDialog onAdd={addHabit} />
             </div>
           ) : (
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
               <table className="w-full text-sm border-collapse">
-                <thead className="bg-slate-50 sticky top-0">
+                <thead className="bg-slate-50 sticky top-0 z-10">
                   <tr>
-                    <th className="text-left font-medium text-slate-600 px-3 py-2 sticky left-0 bg-slate-50 min-w-[180px]">Habit</th>
-                    <th className="text-left font-medium text-slate-600 px-2 py-2 hidden sm:table-cell">Category</th>
-                    {days.map((d) => (
-                      <th key={d} className="font-medium text-slate-500 text-xs px-1 py-2 w-7 text-center">{d}</th>
+                    <th className="text-left font-medium text-slate-600 px-3 py-2 sticky left-0 bg-slate-50 min-w-[60px] z-20">Date</th>
+                    {habits.map((h) => (
+                      <th key={h.id} className="px-2 py-2 min-w-[110px] text-left font-medium text-slate-700 border-l border-slate-100">
+                        <div className="flex items-center gap-2">
+                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: h.color }} />
+                          <span className="truncate max-w-[110px]" title={h.name}>{h.name}</span>
+                          <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto text-slate-300 hover:text-red-600" onClick={() => archiveHabit(h.id)} title="Move to Trash">
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </th>
                     ))}
-                    <th className="text-right font-medium text-slate-600 px-3 py-2 min-w-[80px]">Progress</th>
-                    <th className="px-2 py-2 w-8"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {habits.map((h) => {
-                    const doneCount = days.filter((d) => isDone(h.id, d)).length;
-                    const pct = Math.round((doneCount / h.month_goal) * 100);
+                  {days.map((d) => {
+                    const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
                     return (
-                      <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                        <td className="px-3 py-2 sticky left-0 bg-white font-medium text-slate-900">
-                          <div className="flex items-center gap-2">
-                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: h.color }} />
-                            <span className="truncate max-w-[140px]">{h.name}</span>
-                          </div>
+                      <tr key={d} className={`border-t border-slate-100 ${isToday ? "bg-blue-50/40" : "hover:bg-slate-50/50"}`}>
+                        <td className={`px-3 py-2 sticky left-0 font-medium text-slate-700 ${isToday ? "bg-blue-50/80 text-blue-700" : "bg-white"}`}>
+                          {String(d).padStart(2, "0")}
                         </td>
-                        <td className="px-2 py-2 text-slate-500 hidden sm:table-cell">{h.category ?? "—"}</td>
-                        {days.map((d) => {
+                        {habits.map((h) => {
                           const done = isDone(h.id, d);
                           return (
-                            <td key={d} className="p-0.5 text-center">
+                            <td key={h.id} className="px-2 py-1.5 border-l border-slate-100">
                               <button
                                 onClick={() => toggle(h.id, d)}
-                                className="h-6 w-6 rounded border transition-all hover:scale-110"
+                                className="h-7 w-7 rounded-md border-2 grid place-content-center transition-all hover:scale-105"
                                 style={{
                                   background: done ? h.color : "transparent",
-                                  borderColor: done ? h.color : "#e2e8f0",
+                                  borderColor: done ? h.color : "#cbd5e1",
                                 }}
                                 aria-label={`Toggle ${h.name} day ${d}`}
-                              />
+                              >
+                                {done && <Check className="h-4 w-4 text-white" strokeWidth={3} />}
+                              </button>
                             </td>
                           );
                         })}
-                        <td className="px-3 py-2 text-right">
-                          <div className="text-xs font-semibold text-slate-900">{doneCount}/{h.month_goal}</div>
-                          <div className="text-xs text-slate-500">{Math.min(pct, 999)}%</div>
-                        </td>
-                        <td className="px-2 py-2">
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-red-600" onClick={() => deleteHabit(h.id)}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </td>
                       </tr>
                     );
                   })}
+                  {/* Progress footer */}
+                  <tr className="border-t-2 border-slate-200 bg-slate-50 sticky bottom-0">
+                    <td className="px-3 py-2 sticky left-0 bg-slate-50 font-semibold text-slate-700 text-xs">Total</td>
+                    {habits.map((h) => {
+                      const doneCount = days.filter((d) => isDone(h.id, d)).length;
+                      const pct = Math.round((doneCount / h.month_goal) * 100);
+                      return (
+                        <td key={h.id} className="px-2 py-2 border-l border-slate-100 text-xs">
+                          <div className="font-semibold text-slate-900">{doneCount}/{h.month_goal}</div>
+                          <div className="text-slate-500">{Math.min(pct, 999)}%</div>
+                        </td>
+                      );
+                    })}
+                  </tr>
                 </tbody>
               </table>
             </div>
           )}
         </Card>
 
-        <p className="text-center text-xs text-slate-400 pt-2">Your data is private and synced across devices.</p>
+        <p className="text-center text-xs text-slate-400 pt-2 flex items-center justify-center gap-1">
+          <Cloud className="h-3 w-3" /> Your data is saved to the cloud and synced across devices.
+        </p>
       </main>
     </div>
+  );
+}
+
+function SavedBadge({ savedAt }: { savedAt: Date | null }) {
+  if (!savedAt) return null;
+  return (
+    <span className="hidden sm:inline-flex items-center gap-1 text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded-md">
+      <Cloud className="h-3 w-3" /> Saved
+    </span>
+  );
+}
+
+function TrashDialog({ archived, onRestore, onPurge }: { archived: Habit[]; onRestore: (id: string) => void; onPurge: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="sm" className="relative">
+          <Archive className="h-4 w-4 sm:mr-1" />
+          <span className="hidden sm:inline">Trash</span>
+          {archived.length > 0 && (
+            <span className="ml-1 text-[10px] bg-slate-200 text-slate-700 rounded-full px-1.5 py-0.5">{archived.length}</span>
+          )}
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="bg-white">
+        <DialogHeader><DialogTitle>Trash — Saved Habits</DialogTitle></DialogHeader>
+        <p className="text-xs text-slate-500 -mt-2 mb-2">Deleted habits stay here with their full history. Restore anytime, or permanently delete.</p>
+        {archived.length === 0 ? (
+          <div className="text-center text-sm text-slate-400 py-8">Trash is empty</div>
+        ) : (
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {archived.map((h) => (
+              <div key={h.id} className="flex items-center gap-2 p-2 border border-slate-200 rounded-md">
+                <span className="h-3 w-3 rounded-full shrink-0" style={{ background: h.color }} />
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium text-sm truncate">{h.name}</div>
+                  <div className="text-xs text-slate-500">{h.category ?? "—"} · Goal {h.month_goal}</div>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => onRestore(h.id)}>
+                  <RotateCcw className="h-3 w-3 mr-1" /> Restore
+                </Button>
+                <Button variant="ghost" size="icon" className="text-red-600 hover:bg-red-50" onClick={() => onPurge(h.id)} title="Permanently delete">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
