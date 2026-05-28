@@ -146,6 +146,8 @@ function Index() {
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <SavedBadge savedAt={savedAt} />
+            <TrashDialog archived={archivedHabits} onRestore={restoreHabit} onPurge={permanentDelete} />
             <RemindersButton />
             <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
               <LogOut className="h-4 w-4 mr-1" /> <span className="hidden sm:inline">Sign out</span>
