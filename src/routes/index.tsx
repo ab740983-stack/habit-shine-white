@@ -259,6 +259,36 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
   );
 }
 
+function RingCard({ label, completed, goal, color, highlight }: { label: string; completed: number; goal: number; color: string; highlight?: boolean }) {
+  const pct = goal > 0 ? Math.min(100, (completed / goal) * 100) : 0;
+  const size = 88;
+  const stroke = 9;
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (pct / 100) * circ;
+  return (
+    <Card className={`p-2 sm:p-3 border-slate-200 flex flex-col items-center ${highlight ? "bg-slate-900 text-white" : "bg-slate-900 text-white"}`}>
+      <div className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-2 ${highlight ? "text-blue-300" : "text-slate-300"}`}>{label}</div>
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(255,255,255,0.08)" strokeWidth={stroke} fill="none" />
+          <circle
+            cx={size / 2} cy={size / 2} r={r}
+            stroke={color} strokeWidth={stroke} fill="none"
+            strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+            className="transition-all duration-500"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <div className="text-lg sm:text-xl font-bold leading-none">{completed}</div>
+          <div className="text-[8px] sm:text-[9px] uppercase tracking-wide text-slate-400 mt-0.5">Done</div>
+        </div>
+      </div>
+      <div className="text-[10px] sm:text-xs text-slate-300 mt-2">{goal} <span className="text-slate-500">goal</span></div>
+    </Card>
+  );
+}
+
 function AddHabitDialog({ onAdd }: { onAdd: (name: string, category: string, color: string, goal: number) => void }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
