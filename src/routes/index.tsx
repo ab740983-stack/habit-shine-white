@@ -152,26 +152,15 @@ function Index() {
           <StatCard icon={<Flame className="h-5 w-5" />} label="Active Habits" value={habits.length} color="bg-orange-50 text-orange-600" />
         </div>
 
-        {/* Weekly summary cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {/* Summary + Weekly ring charts (spreadsheet style) */}
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
+          <RingCard label="Summary" completed={totalCompleted} goal={totalGoal} color="#3b82f6" highlight />
           {weeks.map((w, i) => {
-            const dones = completions.filter((c) => {
-              const d = Number(c.date.slice(-2));
-              return w.includes(d);
-            }).length;
+            const dones = completions.filter((c) => w.includes(Number(c.date.slice(-2)))).length;
             const possible = w.length * habits.length;
-            const pct = possible > 0 ? Math.round((dones / possible) * 100) : 0;
+            const weekColors = ["#1e3a8a", "#0e7490", "#9f1239", "#1e40af", "#365314"];
             return (
-              <Card key={i} className="p-3 bg-white border-slate-200">
-                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Week {i + 1}</div>
-                <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-2xl font-semibold text-slate-900">{pct}%</span>
-                </div>
-                <div className="text-xs text-slate-500 mt-0.5">{dones}/{possible || 0} done</div>
-                <div className="h-1.5 mt-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-600 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                </div>
-              </Card>
+              <RingCard key={i} label={`Week ${i + 1}`} completed={dones} goal={possible} color={weekColors[i % 5]} />
             );
           })}
         </div>
@@ -266,6 +255,36 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
         </div>
         <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${color}`}>{icon}</div>
       </div>
+    </Card>
+  );
+}
+
+function RingCard({ label, completed, goal, color, highlight }: { label: string; completed: number; goal: number; color: string; highlight?: boolean }) {
+  const pct = goal > 0 ? Math.min(100, (completed / goal) * 100) : 0;
+  const size = 88;
+  const stroke = 9;
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (pct / 100) * circ;
+  return (
+    <Card className={`p-2 sm:p-3 border-slate-200 flex flex-col items-center ${highlight ? "bg-slate-900 text-white" : "bg-slate-900 text-white"}`}>
+      <div className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-2 ${highlight ? "text-blue-300" : "text-slate-300"}`}>{label}</div>
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(255,255,255,0.08)" strokeWidth={stroke} fill="none" />
+          <circle
+            cx={size / 2} cy={size / 2} r={r}
+            stroke={color} strokeWidth={stroke} fill="none"
+            strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round"
+            className="transition-all duration-500"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <div className="text-lg sm:text-xl font-bold leading-none">{completed}</div>
+          <div className="text-[8px] sm:text-[9px] uppercase tracking-wide text-slate-400 mt-0.5">Done</div>
+        </div>
+      </div>
+      <div className="text-[10px] sm:text-xs text-slate-300 mt-2">{goal} <span className="text-slate-500">goal</span></div>
     </Card>
   );
 }
