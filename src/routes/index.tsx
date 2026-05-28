@@ -14,7 +14,7 @@ import { RemindersButton } from "@/components/Reminders";
 
 export const Route = createFileRoute("/")({ component: Index });
 
-type Habit = { id: string; name: string; category: string | null; color: string; month_goal: number };
+type Habit = { id: string; name: string; category: string | null; color: string; month_goal: number; archived?: boolean };
 type Completion = { habit_id: string; date: string };
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
