@@ -152,26 +152,15 @@ function Index() {
           <StatCard icon={<Flame className="h-5 w-5" />} label="Active Habits" value={habits.length} color="bg-orange-50 text-orange-600" />
         </div>
 
-        {/* Weekly summary cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        {/* Summary + Weekly ring charts (spreadsheet style) */}
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
+          <RingCard label="Summary" completed={totalCompleted} goal={totalGoal} color="#3b82f6" highlight />
           {weeks.map((w, i) => {
-            const dones = completions.filter((c) => {
-              const d = Number(c.date.slice(-2));
-              return w.includes(d);
-            }).length;
+            const dones = completions.filter((c) => w.includes(Number(c.date.slice(-2)))).length;
             const possible = w.length * habits.length;
-            const pct = possible > 0 ? Math.round((dones / possible) * 100) : 0;
+            const weekColors = ["#1e3a8a", "#0e7490", "#9f1239", "#1e40af", "#365314"];
             return (
-              <Card key={i} className="p-3 bg-white border-slate-200">
-                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">Week {i + 1}</div>
-                <div className="flex items-baseline gap-1 mt-1">
-                  <span className="text-2xl font-semibold text-slate-900">{pct}%</span>
-                </div>
-                <div className="text-xs text-slate-500 mt-0.5">{dones}/{possible || 0} done</div>
-                <div className="h-1.5 mt-2 bg-slate-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-blue-600 rounded-full transition-all" style={{ width: `${pct}%` }} />
-                </div>
-              </Card>
+              <RingCard key={i} label={`Week ${i + 1}`} completed={dones} goal={possible} color={weekColors[i % 5]} />
             );
           })}
         </div>
