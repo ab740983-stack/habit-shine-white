@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, LogOut, Trash2, ChevronLeft, ChevronRight, Target, TrendingUp, Flame, CheckCircle2, Check, Archive, RotateCcw, Cloud } from "lucide-react";
+import { Plus, LogOut, Trash2, ChevronLeft, ChevronRight, Target, TrendingUp, Flame, CheckCircle2, Check, Archive, RotateCcw, Cloud, BarChart3, Pencil } from "lucide-react";
 import { RemindersButton } from "@/components/Reminders";
 
 export const Route = createFileRoute("/")({ component: Index });
@@ -35,6 +36,7 @@ function Index() {
   const [completions, setCompletions] = useState<Completion[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [progressOpen, setProgressOpen] = useState(false);
 
   const markSaved = () => setSavedAt(new Date());
 
@@ -61,7 +63,11 @@ function Index() {
     })();
   }, [user, monthStart, monthEnd]);
 
-  const completedSet = useMemo(() => new Set(completions.map((c) => `${c.habit_id}|${c.date}`)), [completions]);
+  // Only count completions of ACTIVE habits — archived habit progress shows as 0
+  const activeIds = useMemo(() => new Set(habits.map((h) => h.id)), [habits]);
+  const activeCompletions = useMemo(() => completions.filter((c) => activeIds.has(c.habit_id)), [completions, activeIds]);
+
+  const completedSet = useMemo(() => new Set(activeCompletions.map((c) => `${c.habit_id}|${c.date}`)), [activeCompletions]);
   const isDone = (hid: string, d: number) => completedSet.has(`${hid}|${dateStr(d)}`);
 
   const toggle = async (hid: string, d: number) => {
@@ -86,7 +92,14 @@ function Index() {
     toast.success("Habit added & saved");
   };
 
-  // Soft delete -> archive (data stays saved, visible in Trash)
+  const updateHabit = async (id: string, patch: Partial<Habit>) => {
+    setHabits((p) => p.map((h) => (h.id === id ? { ...h, ...patch } : h)));
+    const { error } = await supabase.from("habits").update(patch).eq("id", id);
+    if (error) return toast.error(error.message);
+    markSaved();
+    toast.success("Habit updated");
+  };
+
   const archiveHabit = async (id: string) => {
     const h = habits.find((x) => x.id === id);
     if (!h) return;
@@ -95,7 +108,7 @@ function Index() {
     const { error } = await supabase.from("habits").update({ archived: true }).eq("id", id);
     if (error) { toast.error(error.message); return; }
     markSaved();
-    toast.success("Moved to Trash — data is still saved");
+    toast.success("Moved to Trash — progress reset to 0");
   };
 
   const restoreHabit = async (id: string) => {
@@ -105,7 +118,7 @@ function Index() {
     setHabits((p) => [...p, { ...h, archived: false }]);
     await supabase.from("habits").update({ archived: false }).eq("id", id);
     markSaved();
-    toast.success("Restored");
+    toast.success("Restored — progress recovered");
   };
 
   const permanentDelete = async (id: string) => {
@@ -122,7 +135,7 @@ function Index() {
     setMonth(m); setYear(y);
   };
 
-  const totalCompleted = completions.length;
+  const totalCompleted = activeCompletions.length;
   const totalGoal = habits.reduce((s, h) => s + h.month_goal, 0);
   const progressPct = totalGoal > 0 ? Math.round((totalCompleted / totalGoal) * 100) : 0;
 
@@ -147,10 +160,12 @@ function Index() {
           </div>
           <div className="flex items-center gap-1">
             <SavedBadge savedAt={savedAt} />
-            <TrashDialog archived={archivedHabits} onRestore={restoreHabit} onPurge={permanentDelete} />
+            <Button variant="outline" size="sm" onClick={() => setProgressOpen(true)} className="gap-1">
+              <BarChart3 className="h-4 w-4" /> <span className="hidden sm:inline">Progress</span>
+            </Button>
             <RemindersButton />
             <Button variant="ghost" size="sm" onClick={() => supabase.auth.signOut()}>
-              <LogOut className="h-4 w-4 mr-1" /> <span className="hidden sm:inline">Sign out</span>
+              <LogOut className="h-4 w-4 sm:mr-1" /> <span className="hidden sm:inline">Sign out</span>
             </Button>
           </div>
         </div>
@@ -158,15 +173,15 @@ function Index() {
 
       <main className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6 space-y-4">
         {/* Month nav */}
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2 flex-wrap">
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={() => changeMonth(-1)}><ChevronLeft className="h-4 w-4" /></Button>
             <Select value={String(month)} onValueChange={(v) => setMonth(Number(v))}>
-              <SelectTrigger className="w-[140px] bg-white"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[130px] bg-white"><SelectValue /></SelectTrigger>
               <SelectContent>{MONTHS.map((m, i) => <SelectItem key={i} value={String(i)}>{m}</SelectItem>)}</SelectContent>
             </Select>
             <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-              <SelectTrigger className="w-[100px] bg-white"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="w-[90px] bg-white"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {Array.from({ length: 11 }, (_, i) => today.getFullYear() - 5 + i).map((y) => (
                   <SelectItem key={y} value={String(y)}>{y}</SelectItem>
@@ -178,28 +193,7 @@ function Index() {
           <AddHabitDialog onAdd={addHabit} />
         </div>
 
-        {/* Summary cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <StatCard icon={<Target className="h-5 w-5" />} label="Total Goal" value={totalGoal} color="bg-blue-50 text-blue-600" />
-          <StatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Completed" value={totalCompleted} color="bg-emerald-50 text-emerald-600" />
-          <StatCard icon={<TrendingUp className="h-5 w-5" />} label="Progress" value={`${progressPct}%`} color="bg-violet-50 text-violet-600" />
-          <StatCard icon={<Flame className="h-5 w-5" />} label="Active Habits" value={habits.length} color="bg-orange-50 text-orange-600" />
-        </div>
-
-        {/* Summary + Weekly ring charts (spreadsheet style) */}
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
-          <RingCard label="Summary" completed={totalCompleted} goal={totalGoal} color="#3b82f6" highlight />
-          {weeks.map((w, i) => {
-            const dones = completions.filter((c) => w.includes(Number(c.date.slice(-2)))).length;
-            const possible = w.length * habits.length;
-            const weekColors = ["#1e3a8a", "#0e7490", "#9f1239", "#1e40af", "#365314"];
-            return (
-              <RingCard key={i} label={`Week ${i + 1}`} completed={dones} goal={possible} color={weekColors[i % 5]} />
-            );
-          })}
-        </div>
-
-        {/* Habit grid — vertical: dates as rows, habits as columns */}
+        {/* Habit grid — habits as ROWS, dates as COLUMNS */}
         <Card className="bg-white border-slate-200 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-2">
             <h2 className="font-semibold text-slate-900">Daily Habits — {MONTHS[month]} {year}</h2>
@@ -214,39 +208,48 @@ function Index() {
               <AddHabitDialog onAdd={addHabit} />
             </div>
           ) : (
-            <div className="overflow-x-auto max-h-[70vh] overflow-y-auto">
-              <table className="w-full text-sm border-collapse">
+            <div className="overflow-x-auto max-h-[75vh] overflow-y-auto">
+              <table className="text-sm border-collapse">
                 <thead className="bg-slate-50 sticky top-0 z-10">
                   <tr>
-                    <th className="text-left font-medium text-slate-600 px-3 py-2 sticky left-0 bg-slate-50 min-w-[60px] z-20">Date</th>
-                    {habits.map((h) => (
-                      <th key={h.id} className="px-2 py-2 min-w-[110px] text-left font-medium text-slate-700 border-l border-slate-100">
-                        <div className="flex items-center gap-2">
-                          <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: h.color }} />
-                          <span className="truncate max-w-[110px]" title={h.name}>{h.name}</span>
-                          <Button variant="ghost" size="icon" className="h-6 w-6 ml-auto text-slate-300 hover:text-red-600" onClick={() => archiveHabit(h.id)} title="Move to Trash">
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </th>
-                    ))}
+                    <th className="text-left font-medium text-slate-600 px-3 py-2 sticky left-0 bg-slate-50 min-w-[180px] z-20 border-r border-slate-200">Habit</th>
+                    {days.map((d) => {
+                      const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+                      return (
+                        <th key={d} className={`px-1 py-2 min-w-[34px] text-center font-medium ${isToday ? "bg-blue-100 text-blue-700" : "text-slate-600"}`}>
+                          {String(d).padStart(2, "0")}
+                        </th>
+                      );
+                    })}
+                    <th className="px-3 py-2 text-center font-semibold text-slate-700 bg-slate-100 border-l border-slate-200 min-w-[80px] sticky right-0">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {days.map((d) => {
-                    const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+                  {habits.map((h) => {
+                    const doneCount = days.filter((d) => isDone(h.id, d)).length;
+                    const pct = h.month_goal > 0 ? Math.round((doneCount / h.month_goal) * 100) : 0;
                     return (
-                      <tr key={d} className={`border-t border-slate-100 ${isToday ? "bg-blue-50/40" : "hover:bg-slate-50/50"}`}>
-                        <td className={`px-3 py-2 sticky left-0 font-medium text-slate-700 ${isToday ? "bg-blue-50/80 text-blue-700" : "bg-white"}`}>
-                          {String(d).padStart(2, "0")}
+                      <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50/50">
+                        <td className="px-3 py-2 sticky left-0 bg-white border-r border-slate-200 z-10">
+                          <div className="flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: h.color }} />
+                            <span className="truncate max-w-[110px] font-medium text-slate-800" title={h.name}>{h.name}</span>
+                            <div className="ml-auto flex items-center">
+                              <EditHabitDialog habit={h} onSave={(patch) => updateHabit(h.id, patch)} />
+                              <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-300 hover:text-red-600" onClick={() => archiveHabit(h.id)} title="Move to Trash">
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
                         </td>
-                        {habits.map((h) => {
+                        {days.map((d) => {
                           const done = isDone(h.id, d);
+                          const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
                           return (
-                            <td key={h.id} className="px-2 py-1.5 border-l border-slate-100">
+                            <td key={d} className={`px-1 py-1.5 text-center ${isToday ? "bg-blue-50/50" : ""}`}>
                               <button
                                 onClick={() => toggle(h.id, d)}
-                                className="h-7 w-7 rounded-md border-2 grid place-content-center transition-all hover:scale-105"
+                                className="h-7 w-7 rounded-md border-2 grid place-content-center transition-all hover:scale-110 mx-auto"
                                 style={{
                                   background: done ? h.color : "transparent",
                                   borderColor: done ? h.color : "#cbd5e1",
@@ -258,23 +261,13 @@ function Index() {
                             </td>
                           );
                         })}
+                        <td className="px-3 py-2 text-center bg-slate-50 border-l border-slate-200 sticky right-0">
+                          <div className="font-semibold text-slate-900 text-xs">{doneCount}/{h.month_goal}</div>
+                          <div className="text-[10px] text-slate-500">{Math.min(pct, 999)}%</div>
+                        </td>
                       </tr>
                     );
                   })}
-                  {/* Progress footer */}
-                  <tr className="border-t-2 border-slate-200 bg-slate-50 sticky bottom-0">
-                    <td className="px-3 py-2 sticky left-0 bg-slate-50 font-semibold text-slate-700 text-xs">Total</td>
-                    {habits.map((h) => {
-                      const doneCount = days.filter((d) => isDone(h.id, d)).length;
-                      const pct = Math.round((doneCount / h.month_goal) * 100);
-                      return (
-                        <td key={h.id} className="px-2 py-2 border-l border-slate-100 text-xs">
-                          <div className="font-semibold text-slate-900">{doneCount}/{h.month_goal}</div>
-                          <div className="text-slate-500">{Math.min(pct, 999)}%</div>
-                        </td>
-                      );
-                    })}
-                  </tr>
                 </tbody>
               </table>
             </div>
@@ -285,6 +278,41 @@ function Index() {
           <Cloud className="h-3 w-3" /> Your data is saved to the cloud and synced across devices.
         </p>
       </main>
+
+      {/* Progress side sheet */}
+      <Sheet open={progressOpen} onOpenChange={setProgressOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md bg-slate-50 overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> Progress</SheetTitle>
+          </SheetHeader>
+
+          {/* Trash on top */}
+          <div className="mt-4">
+            <TrashPanel archived={archivedHabits} onRestore={restoreHabit} onPurge={permanentDelete} />
+          </div>
+
+          {/* Summary cards */}
+          <div className="grid grid-cols-2 gap-3 mt-4">
+            <StatCard icon={<Target className="h-5 w-5" />} label="Goal" value={totalGoal} color="bg-blue-50 text-blue-600" />
+            <StatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Done" value={totalCompleted} color="bg-emerald-50 text-emerald-600" />
+            <StatCard icon={<TrendingUp className="h-5 w-5" />} label="Progress" value={`${progressPct}%`} color="bg-violet-50 text-violet-600" />
+            <StatCard icon={<Flame className="h-5 w-5" />} label="Active" value={habits.length} color="bg-orange-50 text-orange-600" />
+          </div>
+
+          {/* Ring charts */}
+          <div className="grid grid-cols-3 gap-2 mt-4">
+            <RingCard label="Summary" completed={totalCompleted} goal={totalGoal} color="#3b82f6" />
+            {weeks.map((w, i) => {
+              const dones = activeCompletions.filter((c) => w.includes(Number(c.date.slice(-2)))).length;
+              const possible = w.length * habits.length;
+              const weekColors = ["#1e3a8a", "#0e7490", "#9f1239", "#1e40af", "#365314"];
+              return (
+                <RingCard key={i} label={`Week ${i + 1}`} completed={dones} goal={possible} color={weekColors[i % 5]} />
+              );
+            })}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
@@ -298,72 +326,73 @@ function SavedBadge({ savedAt }: { savedAt: Date | null }) {
   );
 }
 
-function TrashDialog({ archived, onRestore, onPurge }: { archived: Habit[]; onRestore: (id: string) => void; onPurge: (id: string) => void }) {
+function TrashPanel({ archived, onRestore, onPurge }: { archived: Habit[]; onRestore: (id: string) => void; onPurge: (id: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="relative">
-          <Archive className="h-4 w-4 sm:mr-1" />
-          <span className="hidden sm:inline">Trash</span>
+    <Card className="bg-white border-slate-200 p-3">
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center justify-between">
+        <span className="flex items-center gap-2 font-semibold text-slate-800 text-sm">
+          <Archive className="h-4 w-4" /> Trash
           {archived.length > 0 && (
-            <span className="ml-1 text-[10px] bg-slate-200 text-slate-700 rounded-full px-1.5 py-0.5">{archived.length}</span>
+            <span className="text-[10px] bg-slate-200 text-slate-700 rounded-full px-1.5 py-0.5">{archived.length}</span>
           )}
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="bg-white">
-        <DialogHeader><DialogTitle>Trash — Saved Habits</DialogTitle></DialogHeader>
-        <p className="text-xs text-slate-500 -mt-2 mb-2">Deleted habits stay here with their full history. Restore anytime, or permanently delete.</p>
-        {archived.length === 0 ? (
-          <div className="text-center text-sm text-slate-400 py-8">Trash is empty</div>
-        ) : (
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-            {archived.map((h) => (
-              <div key={h.id} className="flex items-center gap-2 p-2 border border-slate-200 rounded-md">
-                <span className="h-3 w-3 rounded-full shrink-0" style={{ background: h.color }} />
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm truncate">{h.name}</div>
-                  <div className="text-xs text-slate-500">{h.category ?? "—"} · Goal {h.month_goal}</div>
+        </span>
+        <ChevronRight className={`h-4 w-4 text-slate-400 transition-transform ${open ? "rotate-90" : ""}`} />
+      </button>
+      {open && (
+        <div className="mt-3">
+          <p className="text-xs text-slate-500 mb-2">Deleted habits stay here with their full history. Restore anytime.</p>
+          {archived.length === 0 ? (
+            <div className="text-center text-xs text-slate-400 py-4">Trash is empty</div>
+          ) : (
+            <div className="space-y-2 max-h-[40vh] overflow-y-auto">
+              {archived.map((h) => (
+                <div key={h.id} className="flex items-center gap-2 p-2 border border-slate-200 rounded-md">
+                  <span className="h-3 w-3 rounded-full shrink-0" style={{ background: h.color }} />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-xs truncate">{h.name}</div>
+                    <div className="text-[10px] text-slate-500">Goal {h.month_goal}</div>
+                  </div>
+                  <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => onRestore(h.id)}>
+                    <RotateCcw className="h-3 w-3 mr-1" /> Restore
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600 hover:bg-red-50" onClick={() => onPurge(h.id)} title="Permanently delete">
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => onRestore(h.id)}>
-                  <RotateCcw className="h-3 w-3 mr-1" /> Restore
-                </Button>
-                <Button variant="ghost" size="icon" className="text-red-600 hover:bg-red-50" onClick={() => onPurge(h.id)} title="Permanently delete">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }
 
 function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number | string; color: string }) {
   return (
-    <Card className="p-4 bg-white border-slate-200">
+    <Card className="p-3 bg-white border-slate-200">
       <div className="flex items-center justify-between">
         <div>
-          <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">{label}</div>
-          <div className="text-2xl font-semibold text-slate-900 mt-1">{value}</div>
+          <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">{label}</div>
+          <div className="text-xl font-semibold text-slate-900 mt-1">{value}</div>
         </div>
-        <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${color}`}>{icon}</div>
+        <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${color}`}>{icon}</div>
       </div>
     </Card>
   );
 }
 
-function RingCard({ label, completed, goal, color, highlight }: { label: string; completed: number; goal: number; color: string; highlight?: boolean }) {
+function RingCard({ label, completed, goal, color }: { label: string; completed: number; goal: number; color: string }) {
   const pct = goal > 0 ? Math.min(100, (completed / goal) * 100) : 0;
-  const size = 88;
-  const stroke = 9;
+  const size = 80;
+  const stroke = 8;
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const offset = circ - (pct / 100) * circ;
   return (
-    <Card className={`p-2 sm:p-3 border-slate-200 flex flex-col items-center ${highlight ? "bg-slate-900 text-white" : "bg-slate-900 text-white"}`}>
-      <div className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wider mb-2 ${highlight ? "text-blue-300" : "text-slate-300"}`}>{label}</div>
+    <Card className="p-2 border-slate-200 flex flex-col items-center bg-slate-900 text-white">
+      <div className="text-[9px] font-semibold uppercase tracking-wider mb-1 text-slate-300">{label}</div>
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
           <circle cx={size / 2} cy={size / 2} r={r} stroke="rgba(255,255,255,0.08)" strokeWidth={stroke} fill="none" />
@@ -375,11 +404,11 @@ function RingCard({ label, completed, goal, color, highlight }: { label: string;
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <div className="text-lg sm:text-xl font-bold leading-none">{completed}</div>
-          <div className="text-[8px] sm:text-[9px] uppercase tracking-wide text-slate-400 mt-0.5">Done</div>
+          <div className="text-lg font-bold leading-none">{completed}</div>
+          <div className="text-[8px] uppercase tracking-wide text-slate-400 mt-0.5">Done</div>
         </div>
       </div>
-      <div className="text-[10px] sm:text-xs text-slate-300 mt-2">{goal} <span className="text-slate-500">goal</span></div>
+      <div className="text-[10px] text-slate-300 mt-1">{goal} <span className="text-slate-500">goal</span></div>
     </Card>
   );
 }
@@ -411,7 +440,7 @@ function AddHabitDialog({ onAdd }: { onAdd: (name: string, category: string, col
           </div>
           <div>
             <Label>Color</Label>
-            <div className="flex gap-2 mt-1">
+            <div className="flex gap-2 mt-1 flex-wrap">
               {COLORS.map((c) => (
                 <button key={c} onClick={() => setColor(c)} className="h-7 w-7 rounded-full ring-offset-2 transition-all" style={{ background: c, boxShadow: color === c ? `0 0 0 2px ${c}` : undefined }} />
               ))}
@@ -422,6 +451,61 @@ function AddHabitDialog({ onAdd }: { onAdd: (name: string, category: string, col
             onAdd(name.trim(), category, color, goal);
             setName(""); setOpen(false);
           }}>Add Habit</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EditHabitDialog({ habit, onSave }: { habit: Habit; onSave: (patch: Partial<Habit>) => void }) {
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState(habit.name);
+  const [category, setCategory] = useState(habit.category ?? CATEGORIES[0]);
+  const [color, setColor] = useState(habit.color);
+  const [goal, setGoal] = useState(habit.month_goal);
+
+  useEffect(() => {
+    if (open) {
+      setName(habit.name);
+      setCategory(habit.category ?? CATEGORIES[0]);
+      setColor(habit.color);
+      setGoal(habit.month_goal);
+    }
+  }, [open, habit]);
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-300 hover:text-blue-600" title="Edit habit">
+          <Pencil className="h-3 w-3" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="bg-white">
+        <DialogHeader><DialogTitle>Edit Habit</DialogTitle></DialogHeader>
+        <div className="space-y-3">
+          <div><Label>Name</Label><Input value={name} onChange={(e) => setName(e.target.value)} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Category</Label>
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{CATEGORIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div><Label>Monthly Goal</Label><Input type="number" min={1} max={31} value={goal} onChange={(e) => setGoal(Number(e.target.value))} /></div>
+          </div>
+          <div>
+            <Label>Color</Label>
+            <div className="flex gap-2 mt-1 flex-wrap">
+              {COLORS.map((c) => (
+                <button key={c} onClick={() => setColor(c)} className="h-7 w-7 rounded-full ring-offset-2 transition-all" style={{ background: c, boxShadow: color === c ? `0 0 0 2px ${c}` : undefined }} />
+              ))}
+            </div>
+          </div>
+          <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => {
+            if (!name.trim()) return toast.error("Name required");
+            onSave({ name: name.trim(), category, color, month_goal: goal });
+            setOpen(false);
+          }}>Save Changes</Button>
         </div>
       </DialogContent>
     </Dialog>
