@@ -38,6 +38,27 @@ function Index() {
   const [loadingData, setLoadingData] = useState(true);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [progressOpen, setProgressOpen] = useState(false);
+  const [orientation, setOrientation] = useState<"horizontal" | "vertical">("horizontal");
+  const [cellSize, setCellSize] = useState<number>(34); // px
+
+  // Swipe-from-right-edge to open progress panel
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  };
+  const onTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStart.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.current.x;
+    const dy = t.clientY - touchStart.current.y;
+    const w = window.innerWidth;
+    // Swipe left starting from right edge → open
+    if (touchStart.current.x > w - 40 && dx < -60 && Math.abs(dy) < 60 && !progressOpen) {
+      setProgressOpen(true);
+    }
+    touchStart.current = null;
+  };
 
   const markSaved = () => setSavedAt(new Date());
 
