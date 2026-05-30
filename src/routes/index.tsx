@@ -194,7 +194,13 @@ function Index() {
           </div>
           <div className="flex items-center gap-1">
             <SavedBadge savedAt={savedAt} />
-            <Button variant="outline" size="sm" onClick={() => setProgressOpen(true)} className="gap-1">
+            <Button variant="outline" size="sm" onClick={() => setTodoOpen(true)} className="gap-1" title="To-Do (swipe right from left edge)">
+              <ListTodo className="h-4 w-4" /> <span className="hidden sm:inline">To-Do</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setScheduleOpen(true)} className="gap-1" title="Daily Schedule (swipe up from bottom)">
+              <CalendarClock className="h-4 w-4" /> <span className="hidden sm:inline">Schedule</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setProgressOpen(true)} className="gap-1" title="Progress (swipe left from right edge)">
               <BarChart3 className="h-4 w-4" /> <span className="hidden sm:inline">Progress</span>
             </Button>
             <RemindersButton />
