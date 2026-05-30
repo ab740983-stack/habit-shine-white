@@ -240,22 +240,12 @@ function Index() {
               <Button variant="outline" size="icon" className="h-7 w-7" title="Zoom in" onClick={() => setCellSize((s) => Math.min(56, s + 4))}>
                 <ZoomIn className="h-3.5 w-3.5" />
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 gap-1"
-                title="Toggle orientation"
-                onClick={() => setOrientation((o) => (o === "horizontal" ? "vertical" : "horizontal"))}
-              >
-                {orientation === "horizontal" ? <Rows3 className="h-3.5 w-3.5" /> : <Columns3 className="h-3.5 w-3.5" />}
-                <span className="text-[10px]">{orientation === "horizontal" ? "Vertical" : "Horizontal"}</span>
-              </Button>
             </div>
           </div>
           {loadingData ? (
             <div className="p-8 text-center text-slate-500 text-sm">Loading…</div>
-          ) : orientation === "horizontal" ? (
-            // Habits = ROWS, Dates = COLUMNS
+          ) : (
+            // Always horizontal: Habits = ROWS, Dates = COLUMNS (laptop spreadsheet style)
             <div className="overflow-auto max-h-[78vh]">
               <table className="text-sm border-collapse">
                 <thead className="bg-slate-50 sticky top-0 z-10">
