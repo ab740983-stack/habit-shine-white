@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, LogOut, Trash2, ChevronLeft, ChevronRight, Target, TrendingUp, Flame, CheckCircle2, Check, Archive, RotateCcw, Cloud, BarChart3, Pencil, Rows3, Columns3, ZoomIn, ZoomOut } from "lucide-react";
+import { Plus, LogOut, Trash2, ChevronLeft, ChevronRight, Target, TrendingUp, Flame, CheckCircle2, Check, Archive, RotateCcw, Cloud, BarChart3, Pencil, ZoomIn, ZoomOut, ListTodo, CalendarClock, X } from "lucide-react";
 
 import { RemindersButton } from "@/components/Reminders";
 
@@ -38,37 +38,36 @@ function Index() {
   const [loadingData, setLoadingData] = useState(true);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [progressOpen, setProgressOpen] = useState(false);
-  const [orientation, setOrientation] = useState<"horizontal" | "vertical">("horizontal");
+  const [todoOpen, setTodoOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [cellSize, setCellSize] = useState<number>(34); // px
   const [addOpen, setAddOpen] = useState(false);
 
-  // Auto-rotate: when device rotates to landscape, force the horizontal spreadsheet layout
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(orientation: landscape)");
-    const apply = (e?: MediaQueryListEvent) => {
-      if ((e ? e.matches : mq.matches)) setOrientation("horizontal");
-    };
-    apply();
-    mq.addEventListener?.("change", apply);
-    return () => mq.removeEventListener?.("change", apply);
-  }, []);
-
-  // Swipe-from-right-edge to open progress panel
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  // Swipe gestures:
+  //  - swipe LEFT from right edge  → open Progress
+  //  - swipe RIGHT from left edge  → open To-Do
+  //  - swipe UP   from bottom edge → open Schedule
+  //  - reverse swipe on an open panel closes it
+  const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
   const onTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
-    touchStart.current = { x: t.clientX, y: t.clientY };
+    touchStart.current = { x: t.clientX, y: t.clientY, t: Date.now() };
   };
   const onTouchEnd = (e: React.TouchEvent) => {
     if (!touchStart.current) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - touchStart.current.x;
     const dy = t.clientY - touchStart.current.y;
+    const sx = touchStart.current.x;
+    const sy = touchStart.current.y;
     const w = window.innerWidth;
-    // Swipe left starting from right edge → open
-    if (touchStart.current.x > w - 40 && dx < -60 && Math.abs(dy) < 60 && !progressOpen) {
-      setProgressOpen(true);
+    const h = window.innerHeight;
+    const anyOpen = progressOpen || todoOpen || scheduleOpen;
+    // Open gestures (only when nothing is open)
+    if (!anyOpen) {
+      if (sx > w - 40 && dx < -60 && Math.abs(dy) < 80) setProgressOpen(true);
+      else if (sx < 40 && dx > 60 && Math.abs(dy) < 80) setTodoOpen(true);
+      else if (sy > h - 60 && dy < -60 && Math.abs(dx) < 80) setScheduleOpen(true);
     }
     touchStart.current = null;
   };
@@ -195,7 +194,13 @@ function Index() {
           </div>
           <div className="flex items-center gap-1">
             <SavedBadge savedAt={savedAt} />
-            <Button variant="outline" size="sm" onClick={() => setProgressOpen(true)} className="gap-1">
+            <Button variant="outline" size="sm" onClick={() => setTodoOpen(true)} className="gap-1" title="To-Do (swipe right from left edge)">
+              <ListTodo className="h-4 w-4" /> <span className="hidden sm:inline">To-Do</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setScheduleOpen(true)} className="gap-1" title="Daily Schedule (swipe up from bottom)">
+              <CalendarClock className="h-4 w-4" /> <span className="hidden sm:inline">Schedule</span>
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setProgressOpen(true)} className="gap-1" title="Progress (swipe left from right edge)">
               <BarChart3 className="h-4 w-4" /> <span className="hidden sm:inline">Progress</span>
             </Button>
             <RemindersButton />
@@ -241,22 +246,12 @@ function Index() {
               <Button variant="outline" size="icon" className="h-7 w-7" title="Zoom in" onClick={() => setCellSize((s) => Math.min(56, s + 4))}>
                 <ZoomIn className="h-3.5 w-3.5" />
               </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 px-2 gap-1"
-                title="Toggle orientation"
-                onClick={() => setOrientation((o) => (o === "horizontal" ? "vertical" : "horizontal"))}
-              >
-                {orientation === "horizontal" ? <Rows3 className="h-3.5 w-3.5" /> : <Columns3 className="h-3.5 w-3.5" />}
-                <span className="text-[10px]">{orientation === "horizontal" ? "Vertical" : "Horizontal"}</span>
-              </Button>
             </div>
           </div>
           {loadingData ? (
             <div className="p-8 text-center text-slate-500 text-sm">Loading…</div>
-          ) : orientation === "horizontal" ? (
-            // Habits = ROWS, Dates = COLUMNS
+          ) : (
+            // Always horizontal: Habits = ROWS, Dates = COLUMNS (laptop spreadsheet style)
             <div className="overflow-auto max-h-[78vh]">
               <table className="text-sm border-collapse">
                 <thead className="bg-slate-50 sticky top-0 z-10">
@@ -346,72 +341,6 @@ function Index() {
                 </tbody>
               </table>
             </div>
-          ) : (
-            // Vertical: Dates = ROWS, Habits = COLUMNS
-            <div className="overflow-auto max-h-[78vh]">
-              <table className="text-sm border-collapse">
-                <thead className="bg-slate-50 sticky top-0 z-10">
-                  <tr>
-                    <th className="text-left font-medium text-slate-600 px-2 py-2 sticky left-0 bg-slate-50 min-w-[60px] z-20 border-r border-slate-200">Date</th>
-                    {habits.map((h) => (
-                      <th key={h.id} style={{ minWidth: Math.max(60, cellSize + 30) }} className="px-1 py-2 text-center font-medium text-[10px] text-slate-700">
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="h-2 w-2 rounded-full" style={{ background: h.color }} />
-                          <span className="truncate max-w-[80px]" title={h.name}>{h.name}</span>
-                          <div className="flex">
-                            <EditHabitDialog habit={h} onSave={(patch) => updateHabit(h.id, patch)} />
-                            <Button variant="ghost" size="icon" className="h-5 w-5 text-slate-300 hover:text-red-600" onClick={() => archiveHabit(h.id)} title="Move to Trash">
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {days.map((d) => {
-                    const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
-                    return (
-                      <tr key={d} className="border-t border-slate-100 hover:bg-slate-50/50">
-                        <td className={`px-2 py-1 sticky left-0 border-r border-slate-200 z-10 text-center font-medium text-xs ${isToday ? "bg-blue-100 text-blue-700" : "bg-white text-slate-600"}`}>
-                          {String(d).padStart(2, "0")}
-                        </td>
-                        {habits.map((h) => {
-                          const done = isDone(h.id, d);
-                          const btn = Math.max(18, cellSize - 8);
-                          return (
-                            <td key={h.id} className={`px-0 py-1 text-center ${isToday ? "bg-blue-50/50" : ""}`}>
-                              <button
-                                onClick={() => toggle(h.id, d)}
-                                className="rounded-md border-2 grid place-content-center transition-all hover:scale-110 mx-auto"
-                                style={{ height: btn, width: btn, background: done ? h.color : "transparent", borderColor: done ? h.color : "#cbd5e1" }}
-                                aria-label={`Toggle ${h.name} day ${d}`}
-                              >
-                                {done && <Check style={{ height: btn * 0.6, width: btn * 0.6 }} className="text-white" strokeWidth={3} />}
-                              </button>
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                  <tr className="border-t-2 border-slate-300 bg-slate-50">
-                    <td className="px-2 py-2 sticky left-0 bg-slate-100 border-r border-slate-200 z-10 font-semibold text-xs text-slate-700">Total</td>
-                    {habits.map((h) => {
-                      const doneCount = days.filter((d) => isDone(h.id, d)).length;
-                      const pct = h.month_goal > 0 ? Math.round((doneCount / h.month_goal) * 100) : 0;
-                      return (
-                        <td key={h.id} className="px-1 py-2 text-center">
-                          <div className="font-semibold text-slate-900 text-xs">{doneCount}/{h.month_goal}</div>
-                          <div className="text-[10px] text-slate-500">{Math.min(pct, 999)}%</div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
           )}
         </Card>
 
@@ -457,6 +386,26 @@ function Index() {
               );
             })}
           </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* To-Do panel — swipe right from left edge */}
+      <Sheet open={todoOpen} onOpenChange={setTodoOpen}>
+        <SheetContent side="left" className="w-full sm:max-w-md bg-slate-50 overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2"><ListTodo className="h-5 w-5" /> To-Do List</SheetTitle>
+          </SheetHeader>
+          <TodoPanel userId={user.id} onChange={markSaved} />
+        </SheetContent>
+      </Sheet>
+
+      {/* Daily Schedule panel — swipe up from bottom edge */}
+      <Sheet open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <SheetContent side="bottom" className="h-[85vh] bg-slate-50 overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2"><CalendarClock className="h-5 w-5" /> Daily Schedule</SheetTitle>
+          </SheetHeader>
+          <SchedulePanel userId={user.id} onChange={markSaved} />
         </SheetContent>
       </Sheet>
     </div>
@@ -659,5 +608,134 @@ function EditHabitDialog({ habit, onSave }: { habit: Habit; onSave: (patch: Part
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ============ To-Do Panel (saved locally per user) ============
+type Todo = { id: string; text: string; done: boolean; createdAt: number };
+
+function TodoPanel({ userId, onChange }: { userId: string; onChange: () => void }) {
+  const key = `todos:${userId}`;
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [text, setText] = useState("");
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) setTodos(JSON.parse(raw));
+    } catch {}
+  }, [key]);
+
+  const persist = (next: Todo[]) => {
+    setTodos(next);
+    try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
+    onChange();
+  };
+
+  const add = () => {
+    if (!text.trim()) return;
+    persist([{ id: crypto.randomUUID(), text: text.trim(), done: false, createdAt: Date.now() }, ...todos]);
+    setText("");
+  };
+  const toggle = (id: string) => persist(todos.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  const remove = (id: string) => persist(todos.filter((t) => t.id !== id));
+  const clearDone = () => persist(todos.filter((t) => !t.done));
+
+  const remaining = todos.filter((t) => !t.done).length;
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="flex gap-2">
+        <Input
+          placeholder="Add a task…"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+        />
+        <Button onClick={add} className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /></Button>
+      </div>
+      <div className="flex items-center justify-between text-xs text-slate-500">
+        <span>{remaining} remaining · {todos.length} total</span>
+        {todos.some((t) => t.done) && (
+          <button className="text-red-500 hover:underline" onClick={clearDone}>Clear completed</button>
+        )}
+      </div>
+      <div className="space-y-2">
+        {todos.length === 0 && <div className="text-center text-sm text-slate-400 py-8">No tasks yet. Add one above.</div>}
+        {todos.map((t) => (
+          <div key={t.id} className="flex items-center gap-2 bg-white border border-slate-200 rounded-md px-2 py-2">
+            <button
+              onClick={() => toggle(t.id)}
+              className={`h-5 w-5 rounded border-2 grid place-content-center shrink-0 ${t.done ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}
+              aria-label="Toggle"
+            >
+              {t.done && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
+            </button>
+            <span className={`flex-1 text-sm ${t.done ? "line-through text-slate-400" : "text-slate-800"}`}>{t.text}</span>
+            <button onClick={() => remove(t.id)} className="text-slate-300 hover:text-red-500">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============ Daily Schedule Panel ============
+type ScheduleItem = { id: string; time: string; title: string };
+
+function SchedulePanel({ userId, onChange }: { userId: string; onChange: () => void }) {
+  const key = `schedule:${userId}`;
+  const [items, setItems] = useState<ScheduleItem[]>([]);
+  const [time, setTime] = useState("09:00");
+  const [title, setTitle] = useState("");
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) setItems(JSON.parse(raw));
+    } catch {}
+  }, [key]);
+
+  const persist = (next: ScheduleItem[]) => {
+    const sorted = [...next].sort((a, b) => a.time.localeCompare(b.time));
+    setItems(sorted);
+    try { localStorage.setItem(key, JSON.stringify(sorted)); } catch {}
+    onChange();
+  };
+
+  const add = () => {
+    if (!title.trim()) return;
+    persist([...items, { id: crypto.randomUUID(), time, title: title.trim() }]);
+    setTitle("");
+  };
+  const remove = (id: string) => persist(items.filter((i) => i.id !== id));
+
+  return (
+    <div className="mt-4 space-y-3 max-w-2xl mx-auto">
+      <div className="flex gap-2">
+        <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-28" />
+        <Input
+          placeholder="What's planned?"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+        />
+        <Button onClick={add} className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /></Button>
+      </div>
+      <div className="space-y-2">
+        {items.length === 0 && <div className="text-center text-sm text-slate-400 py-8">No schedule items. Add your first one above.</div>}
+        {items.map((i) => (
+          <div key={i.id} className="flex items-center gap-3 bg-white border border-slate-200 rounded-md px-3 py-2">
+            <div className="font-mono text-sm font-semibold text-blue-600 w-16 shrink-0">{i.time}</div>
+            <div className="flex-1 text-sm text-slate-800">{i.title}</div>
+            <button onClick={() => remove(i.id)} className="text-slate-300 hover:text-red-500">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
