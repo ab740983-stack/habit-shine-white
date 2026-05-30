@@ -422,7 +422,11 @@ function Index() {
       </main>
 
       {/* Progress side sheet */}
+      {/* Hidden controllable Add dialog (opened by empty placeholder rows) */}
+      <AddHabitDialog onAdd={addHabit} open={addOpen} onOpenChange={setAddOpen} hideTrigger />
+
       <Sheet open={progressOpen} onOpenChange={setProgressOpen}>
+
         <SheetContent side="right" className="w-full sm:max-w-md bg-slate-50 overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> Progress</SheetTitle>
