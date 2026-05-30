@@ -610,3 +610,132 @@ function EditHabitDialog({ habit, onSave }: { habit: Habit; onSave: (patch: Part
     </Dialog>
   );
 }
+
+// ============ To-Do Panel (saved locally per user) ============
+type Todo = { id: string; text: string; done: boolean; createdAt: number };
+
+function TodoPanel({ userId, onChange }: { userId: string; onChange: () => void }) {
+  const key = `todos:${userId}`;
+  const [todos, setTodos] = useState<Todo[]>([]);
+  const [text, setText] = useState("");
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) setTodos(JSON.parse(raw));
+    } catch {}
+  }, [key]);
+
+  const persist = (next: Todo[]) => {
+    setTodos(next);
+    try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
+    onChange();
+  };
+
+  const add = () => {
+    if (!text.trim()) return;
+    persist([{ id: crypto.randomUUID(), text: text.trim(), done: false, createdAt: Date.now() }, ...todos]);
+    setText("");
+  };
+  const toggle = (id: string) => persist(todos.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  const remove = (id: string) => persist(todos.filter((t) => t.id !== id));
+  const clearDone = () => persist(todos.filter((t) => !t.done));
+
+  const remaining = todos.filter((t) => !t.done).length;
+
+  return (
+    <div className="mt-4 space-y-3">
+      <div className="flex gap-2">
+        <Input
+          placeholder="Add a task…"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+        />
+        <Button onClick={add} className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /></Button>
+      </div>
+      <div className="flex items-center justify-between text-xs text-slate-500">
+        <span>{remaining} remaining · {todos.length} total</span>
+        {todos.some((t) => t.done) && (
+          <button className="text-red-500 hover:underline" onClick={clearDone}>Clear completed</button>
+        )}
+      </div>
+      <div className="space-y-2">
+        {todos.length === 0 && <div className="text-center text-sm text-slate-400 py-8">No tasks yet. Add one above.</div>}
+        {todos.map((t) => (
+          <div key={t.id} className="flex items-center gap-2 bg-white border border-slate-200 rounded-md px-2 py-2">
+            <button
+              onClick={() => toggle(t.id)}
+              className={`h-5 w-5 rounded border-2 grid place-content-center shrink-0 ${t.done ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}
+              aria-label="Toggle"
+            >
+              {t.done && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
+            </button>
+            <span className={`flex-1 text-sm ${t.done ? "line-through text-slate-400" : "text-slate-800"}`}>{t.text}</span>
+            <button onClick={() => remove(t.id)} className="text-slate-300 hover:text-red-500">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ============ Daily Schedule Panel ============
+type ScheduleItem = { id: string; time: string; title: string };
+
+function SchedulePanel({ userId, onChange }: { userId: string; onChange: () => void }) {
+  const key = `schedule:${userId}`;
+  const [items, setItems] = useState<ScheduleItem[]>([]);
+  const [time, setTime] = useState("09:00");
+  const [title, setTitle] = useState("");
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      if (raw) setItems(JSON.parse(raw));
+    } catch {}
+  }, [key]);
+
+  const persist = (next: ScheduleItem[]) => {
+    const sorted = [...next].sort((a, b) => a.time.localeCompare(b.time));
+    setItems(sorted);
+    try { localStorage.setItem(key, JSON.stringify(sorted)); } catch {}
+    onChange();
+  };
+
+  const add = () => {
+    if (!title.trim()) return;
+    persist([...items, { id: crypto.randomUUID(), time, title: title.trim() }]);
+    setTitle("");
+  };
+  const remove = (id: string) => persist(items.filter((i) => i.id !== id));
+
+  return (
+    <div className="mt-4 space-y-3 max-w-2xl mx-auto">
+      <div className="flex gap-2">
+        <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-28" />
+        <Input
+          placeholder="What's planned?"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
+        />
+        <Button onClick={add} className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /></Button>
+      </div>
+      <div className="space-y-2">
+        {items.length === 0 && <div className="text-center text-sm text-slate-400 py-8">No schedule items. Add your first one above.</div>}
+        {items.map((i) => (
+          <div key={i.id} className="flex items-center gap-3 bg-white border border-slate-200 rounded-md px-3 py-2">
+            <div className="font-mono text-sm font-semibold text-blue-600 w-16 shrink-0">{i.time}</div>
+            <div className="flex-1 text-sm text-slate-800">{i.title}</div>
+            <button onClick={() => remove(i.id)} className="text-slate-300 hover:text-red-500">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
