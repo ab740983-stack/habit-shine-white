@@ -40,6 +40,17 @@ function Index() {
   const [progressOpen, setProgressOpen] = useState(false);
   const [orientation, setOrientation] = useState<"horizontal" | "vertical">("horizontal");
   const [cellSize, setCellSize] = useState<number>(34); // px
+  const [addOpen, setAddOpen] = useState(false);
+
+  // Auto-rotate: follow device orientation (landscape → horizontal layout, portrait → vertical)
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(orientation: landscape)");
+    const apply = () => setOrientation(mq.matches ? "horizontal" : "vertical");
+    apply();
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
+  }, []);
 
   // Swipe-from-right-edge to open progress panel
   const touchStart = useRef<{ x: number; y: number } | null>(null);
