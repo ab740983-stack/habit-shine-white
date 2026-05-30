@@ -40,6 +40,19 @@ function Index() {
   const [progressOpen, setProgressOpen] = useState(false);
   const [orientation, setOrientation] = useState<"horizontal" | "vertical">("horizontal");
   const [cellSize, setCellSize] = useState<number>(34); // px
+  const [addOpen, setAddOpen] = useState(false);
+
+  // Auto-rotate: when device rotates to landscape, force the horizontal spreadsheet layout
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.matchMedia) return;
+    const mq = window.matchMedia("(orientation: landscape)");
+    const apply = (e?: MediaQueryListEvent) => {
+      if ((e ? e.matches : mq.matches)) setOrientation("horizontal");
+    };
+    apply();
+    mq.addEventListener?.("change", apply);
+    return () => mq.removeEventListener?.("change", apply);
+  }, []);
 
   // Swipe-from-right-edge to open progress panel
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -242,12 +255,6 @@ function Index() {
           </div>
           {loadingData ? (
             <div className="p-8 text-center text-slate-500 text-sm">Loading…</div>
-          ) : habits.length === 0 ? (
-            <div className="p-10 text-center">
-              <div className="text-slate-400 mb-2">No habits yet</div>
-              <p className="text-sm text-slate-500 mb-4">Add your first habit to start tracking.</p>
-              <AddHabitDialog onAdd={addHabit} />
-            </div>
           ) : orientation === "horizontal" ? (
             // Habits = ROWS, Dates = COLUMNS
             <div className="overflow-auto max-h-[78vh]">
@@ -308,6 +315,34 @@ function Index() {
                       </tr>
                     );
                   })}
+                  {Array.from({ length: Math.max(0, 12 - habits.length) }).map((_, i) => (
+                    <tr key={`empty-${i}`} className="border-t border-slate-100">
+                      <td className="px-2 py-1.5 sticky left-0 bg-white border-r border-slate-200 z-10">
+                        <button
+                          onClick={() => setAddOpen(true)}
+                          className="flex items-center gap-1.5 w-full text-left text-slate-400 hover:text-blue-600 text-xs"
+                          title="Add habit"
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span className="truncate">Add habit</span>
+                        </button>
+                      </td>
+                      {days.map((d) => {
+                        const btn = Math.max(18, cellSize - 8);
+                        return (
+                          <td key={d} style={{ minWidth: cellSize }} className="px-0 py-1 text-center">
+                            <div
+                              className="rounded-md border border-dashed border-slate-200 mx-auto"
+                              style={{ height: btn, width: btn }}
+                            />
+                          </td>
+                        );
+                      })}
+                      <td className="px-2 py-1.5 text-center bg-slate-50/50 border-l border-slate-200 sticky right-0">
+                        <div className="text-[10px] text-slate-300">—</div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -387,7 +422,11 @@ function Index() {
       </main>
 
       {/* Progress side sheet */}
+      {/* Hidden controllable Add dialog (opened by empty placeholder rows) */}
+      <AddHabitDialog onAdd={addHabit} open={addOpen} onOpenChange={setAddOpen} hideTrigger />
+
       <Sheet open={progressOpen} onOpenChange={setProgressOpen}>
+
         <SheetContent side="right" className="w-full sm:max-w-md bg-slate-50 overflow-y-auto">
           <SheetHeader>
             <SheetTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" /> Progress</SheetTitle>
@@ -520,8 +559,10 @@ function RingCard({ label, completed, goal, color }: { label: string; completed:
   );
 }
 
-function AddHabitDialog({ onAdd }: { onAdd: (name: string, category: string, color: string, goal: number) => void }) {
-  const [open, setOpen] = useState(false);
+function AddHabitDialog({ onAdd, open: openProp, onOpenChange, hideTrigger }: { onAdd: (name: string, category: string, color: string, goal: number) => void; open?: boolean; onOpenChange?: (o: boolean) => void; hideTrigger?: boolean }) {
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (o: boolean) => { onOpenChange ? onOpenChange(o) : setOpenState(o); };
   const [name, setName] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [color, setColor] = useState(COLORS[0]);
@@ -529,9 +570,11 @@ function AddHabitDialog({ onAdd }: { onAdd: (name: string, category: string, col
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4 mr-1" /> Add Habit</Button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <Button className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4 mr-1" /> Add Habit</Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="bg-white">
         <DialogHeader><DialogTitle>New Habit</DialogTitle></DialogHeader>
         <div className="space-y-3">
