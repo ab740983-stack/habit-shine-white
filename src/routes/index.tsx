@@ -555,8 +555,10 @@ function RingCard({ label, completed, goal, color }: { label: string; completed:
   );
 }
 
-function AddHabitDialog({ onAdd }: { onAdd: (name: string, category: string, color: string, goal: number) => void }) {
-  const [open, setOpen] = useState(false);
+function AddHabitDialog({ onAdd, open: openProp, onOpenChange, hideTrigger }: { onAdd: (name: string, category: string, color: string, goal: number) => void; open?: boolean; onOpenChange?: (o: boolean) => void; hideTrigger?: boolean }) {
+  const [openState, setOpenState] = useState(false);
+  const open = openProp ?? openState;
+  const setOpen = (o: boolean) => { onOpenChange ? onOpenChange(o) : setOpenState(o); };
   const [name, setName] = useState("");
   const [category, setCategory] = useState(CATEGORIES[0]);
   const [color, setColor] = useState(COLORS[0]);
@@ -564,9 +566,11 @@ function AddHabitDialog({ onAdd }: { onAdd: (name: string, category: string, col
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4 mr-1" /> Add Habit</Button>
-      </DialogTrigger>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <Button className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4 mr-1" /> Add Habit</Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="bg-white">
         <DialogHeader><DialogTitle>New Habit</DialogTitle></DialogHeader>
         <div className="space-y-3">
