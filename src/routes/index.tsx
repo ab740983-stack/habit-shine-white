@@ -42,11 +42,13 @@ function Index() {
   const [cellSize, setCellSize] = useState<number>(34); // px
   const [addOpen, setAddOpen] = useState(false);
 
-  // Auto-rotate: follow device orientation (landscape → horizontal layout, portrait → vertical)
+  // Auto-rotate: when device rotates to landscape, force the horizontal spreadsheet layout
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
     const mq = window.matchMedia("(orientation: landscape)");
-    const apply = () => setOrientation(mq.matches ? "horizontal" : "vertical");
+    const apply = (e?: MediaQueryListEvent) => {
+      if ((e ? e.matches : mq.matches)) setOrientation("horizontal");
+    };
     apply();
     mq.addEventListener?.("change", apply);
     return () => mq.removeEventListener?.("change", apply);
