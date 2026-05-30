@@ -38,37 +38,36 @@ function Index() {
   const [loadingData, setLoadingData] = useState(true);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
   const [progressOpen, setProgressOpen] = useState(false);
-  const [orientation, setOrientation] = useState<"horizontal" | "vertical">("horizontal");
+  const [todoOpen, setTodoOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [cellSize, setCellSize] = useState<number>(34); // px
   const [addOpen, setAddOpen] = useState(false);
 
-  // Auto-rotate: when device rotates to landscape, force the horizontal spreadsheet layout
-  useEffect(() => {
-    if (typeof window === "undefined" || !window.matchMedia) return;
-    const mq = window.matchMedia("(orientation: landscape)");
-    const apply = (e?: MediaQueryListEvent) => {
-      if ((e ? e.matches : mq.matches)) setOrientation("horizontal");
-    };
-    apply();
-    mq.addEventListener?.("change", apply);
-    return () => mq.removeEventListener?.("change", apply);
-  }, []);
-
-  // Swipe-from-right-edge to open progress panel
-  const touchStart = useRef<{ x: number; y: number } | null>(null);
+  // Swipe gestures:
+  //  - swipe LEFT from right edge  → open Progress
+  //  - swipe RIGHT from left edge  → open To-Do
+  //  - swipe UP   from bottom edge → open Schedule
+  //  - reverse swipe on an open panel closes it
+  const touchStart = useRef<{ x: number; y: number; t: number } | null>(null);
   const onTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
-    touchStart.current = { x: t.clientX, y: t.clientY };
+    touchStart.current = { x: t.clientX, y: t.clientY, t: Date.now() };
   };
   const onTouchEnd = (e: React.TouchEvent) => {
     if (!touchStart.current) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - touchStart.current.x;
     const dy = t.clientY - touchStart.current.y;
+    const sx = touchStart.current.x;
+    const sy = touchStart.current.y;
     const w = window.innerWidth;
-    // Swipe left starting from right edge → open
-    if (touchStart.current.x > w - 40 && dx < -60 && Math.abs(dy) < 60 && !progressOpen) {
-      setProgressOpen(true);
+    const h = window.innerHeight;
+    const anyOpen = progressOpen || todoOpen || scheduleOpen;
+    // Open gestures (only when nothing is open)
+    if (!anyOpen) {
+      if (sx > w - 40 && dx < -60 && Math.abs(dy) < 80) setProgressOpen(true);
+      else if (sx < 40 && dx > 60 && Math.abs(dy) < 80) setTodoOpen(true);
+      else if (sy > h - 60 && dy < -60 && Math.abs(dx) < 80) setScheduleOpen(true);
     }
     touchStart.current = null;
   };
