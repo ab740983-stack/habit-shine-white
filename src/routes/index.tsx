@@ -388,6 +388,26 @@ function Index() {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* To-Do panel — swipe right from left edge */}
+      <Sheet open={todoOpen} onOpenChange={setTodoOpen}>
+        <SheetContent side="left" className="w-full sm:max-w-md bg-slate-50 overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2"><ListTodo className="h-5 w-5" /> To-Do List</SheetTitle>
+          </SheetHeader>
+          <TodoPanel userId={user.id} onChange={markSaved} />
+        </SheetContent>
+      </Sheet>
+
+      {/* Daily Schedule panel — swipe up from bottom edge */}
+      <Sheet open={scheduleOpen} onOpenChange={setScheduleOpen}>
+        <SheetContent side="bottom" className="h-[85vh] bg-slate-50 overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2"><CalendarClock className="h-5 w-5" /> Daily Schedule</SheetTitle>
+          </SheetHeader>
+          <SchedulePanel userId={user.id} onChange={markSaved} />
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
