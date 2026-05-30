@@ -255,12 +255,6 @@ function Index() {
           </div>
           {loadingData ? (
             <div className="p-8 text-center text-slate-500 text-sm">Loading…</div>
-          ) : habits.length === 0 ? (
-            <div className="p-10 text-center">
-              <div className="text-slate-400 mb-2">No habits yet</div>
-              <p className="text-sm text-slate-500 mb-4">Add your first habit to start tracking.</p>
-              <AddHabitDialog onAdd={addHabit} />
-            </div>
           ) : orientation === "horizontal" ? (
             // Habits = ROWS, Dates = COLUMNS
             <div className="overflow-auto max-h-[78vh]">
