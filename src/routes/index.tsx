@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, LogOut, Trash2, ChevronLeft, ChevronRight, Target, TrendingUp, Flame, CheckCircle2, Check, Archive, RotateCcw, Cloud, BarChart3, Pencil, ZoomIn, ZoomOut, ListTodo, CalendarClock, X } from "lucide-react";
+import { Plus, LogOut, Trash2, ChevronLeft, ChevronRight, Target, TrendingUp, Flame, CheckCircle2, Check, Archive, RotateCcw, Cloud, BarChart3, Pencil, ZoomIn, ZoomOut, ListTodo, CalendarClock, X, Maximize2 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart, ComposedChart, Bar, Cell, ReferenceLine } from "recharts";
 
 import { RemindersButton } from "@/components/Reminders";
 
@@ -41,7 +42,9 @@ function Index() {
   const [todoOpen, setTodoOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [cellSize, setCellSize] = useState<number>(34); // px
+  const [fitMode, setFitMode] = useState<boolean>(true); // auto-fit all dates in viewport
   const [addOpen, setAddOpen] = useState(false);
+  const [allCompletions, setAllCompletions] = useState<Completion[]>([]); // for trading chart
 
   // Swipe gestures:
   //  - swipe LEFT from right edge  → open Progress
@@ -96,6 +99,28 @@ function Index() {
       markSaved();
     })();
   }, [user, monthStart, monthEnd]);
+
+  // Load full history once for the trading chart
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase.from("habit_completions").select("habit_id,date").order("date");
+      setAllCompletions((data ?? []) as Completion[]);
+    })();
+  }, [user, completions.length]);
+
+  // Auto-fit cell size to viewport when fitMode is on
+  useEffect(() => {
+    if (!fitMode) return;
+    const compute = () => {
+      const avail = Math.min(window.innerWidth, 1280) - 160; // habit col + total col + padding
+      const size = Math.max(10, Math.floor(avail / daysInMonth));
+      setCellSize(size);
+    };
+    compute();
+    window.addEventListener("resize", compute);
+    return () => window.removeEventListener("resize", compute);
+  }, [fitMode, daysInMonth]);
 
   // Only count completions of ACTIVE habits — archived habit progress shows as 0
   const activeIds = useMemo(() => new Set(habits.map((h) => h.id)), [habits]);
@@ -239,11 +264,14 @@ function Index() {
             <h2 className="font-semibold text-slate-900 text-sm sm:text-base">Daily Habits — {MONTHS[month]} {year}</h2>
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-slate-500 hidden sm:inline mr-1">{habits.length} active{archivedHabits.length > 0 && ` · ${archivedHabits.length} trash`}</span>
-              <Button variant="outline" size="icon" className="h-7 w-7" title="Zoom out" onClick={() => setCellSize((s) => Math.max(22, s - 4))}>
+              <Button variant={fitMode ? "default" : "outline"} size="icon" className="h-7 w-7" title="Fit all dates to screen" onClick={() => setFitMode((f) => !f)}>
+                <Maximize2 className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="outline" size="icon" className="h-7 w-7" title="Zoom out" onClick={() => { setFitMode(false); setCellSize((s) => Math.max(10, s - 4)); }}>
                 <ZoomOut className="h-3.5 w-3.5" />
               </Button>
               <span className="text-[10px] text-slate-500 w-7 text-center">{cellSize}</span>
-              <Button variant="outline" size="icon" className="h-7 w-7" title="Zoom in" onClick={() => setCellSize((s) => Math.min(56, s + 4))}>
+              <Button variant="outline" size="icon" className="h-7 w-7" title="Zoom in" onClick={() => { setFitMode(false); setCellSize((s) => Math.min(56, s + 4)); }}>
                 <ZoomIn className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -251,21 +279,20 @@ function Index() {
           {loadingData ? (
             <div className="p-8 text-center text-slate-500 text-sm">Loading…</div>
           ) : (
-            // Always horizontal: Habits = ROWS, Dates = COLUMNS (laptop spreadsheet style)
-            <div className="overflow-auto max-h-[78vh]">
-              <table className="text-sm border-collapse">
+            <div className={fitMode ? "overflow-x-hidden overflow-y-auto max-h-[78vh]" : "overflow-auto max-h-[78vh]"}>
+              <table className={`text-sm border-collapse ${fitMode ? "w-full table-fixed" : ""}`}>
                 <thead className="bg-slate-50 sticky top-0 z-10">
                   <tr>
-                    <th className="text-left font-medium text-slate-600 px-2 py-2 sticky left-0 bg-slate-50 min-w-[150px] z-20 border-r border-slate-200">Habit</th>
+                    <th className="text-left font-medium text-slate-600 px-1.5 py-2 sticky left-0 bg-slate-50 z-20 border-r border-slate-200" style={{ width: fitMode ? 80 : undefined, minWidth: fitMode ? 80 : 150 }}>Habit</th>
                     {days.map((d) => {
                       const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
                       return (
-                        <th key={d} style={{ minWidth: cellSize }} className={`px-0.5 py-2 text-center font-medium text-[10px] ${isToday ? "bg-blue-100 text-blue-700" : "text-slate-600"}`}>
-                          {String(d).padStart(2, "0")}
+                        <th key={d} style={{ width: cellSize, minWidth: cellSize }} className={`px-0 py-2 text-center font-medium text-[9px] ${isToday ? "bg-blue-100 text-blue-700" : "text-slate-600"}`}>
+                          {d}
                         </th>
                       );
                     })}
-                    <th className="px-2 py-2 text-center font-semibold text-slate-700 bg-slate-100 border-l border-slate-200 min-w-[70px] sticky right-0">Total</th>
+                    <th className="px-1 py-2 text-center font-semibold text-slate-700 bg-slate-100 border-l border-slate-200 sticky right-0" style={{ width: fitMode ? 44 : undefined, minWidth: fitMode ? 44 : 70 }}>Σ</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -274,66 +301,61 @@ function Index() {
                     const pct = h.month_goal > 0 ? Math.round((doneCount / h.month_goal) * 100) : 0;
                     return (
                       <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                        <td className="px-2 py-1.5 sticky left-0 bg-white border-r border-slate-200 z-10">
-                          <div className="flex items-center gap-1.5">
-                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: h.color }} />
-                            <span className="truncate max-w-[90px] font-medium text-slate-800 text-xs" title={h.name}>{h.name}</span>
-                            <div className="ml-auto flex items-center">
-                              <EditHabitDialog habit={h} onSave={(patch) => updateHabit(h.id, patch)} />
-                              <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-300 hover:text-red-600" onClick={() => archiveHabit(h.id)} title="Move to Trash">
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
+                        <td className="px-1.5 py-1 sticky left-0 bg-white border-r border-slate-200 z-10" style={{ width: fitMode ? 80 : undefined }}>
+                          <div className="flex items-center gap-1">
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: h.color }} />
+                            <span className="truncate font-medium text-slate-800 text-[11px] flex-1" title={h.name}>{h.name}</span>
+                            <EditHabitDialog habit={h} onSave={(patch) => updateHabit(h.id, patch)} />
+                            <Button variant="ghost" size="icon" className="h-5 w-5 text-slate-300 hover:text-red-600" onClick={() => archiveHabit(h.id)} title="Trash">
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                           </div>
                         </td>
                         {days.map((d) => {
                           const done = isDone(h.id, d);
                           const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
-                          const btn = Math.max(18, cellSize - 8);
+                          const btn = Math.max(8, cellSize - 4);
                           return (
-                            <td key={d} style={{ minWidth: cellSize }} className={`px-0 py-1 text-center ${isToday ? "bg-blue-50/50" : ""}`}>
+                            <td key={d} style={{ width: cellSize, minWidth: cellSize }} className={`px-0 py-0.5 text-center ${isToday ? "bg-blue-50/50" : ""}`}>
                               <button
                                 onClick={() => toggle(h.id, d)}
-                                className="rounded-md border-2 grid place-content-center transition-all hover:scale-110 mx-auto"
-                                style={{ height: btn, width: btn, background: done ? h.color : "transparent", borderColor: done ? h.color : "#cbd5e1" }}
+                                className="rounded-sm border grid place-content-center transition-all hover:scale-110 mx-auto"
+                                style={{ height: btn, width: btn, background: done ? h.color : "transparent", borderColor: done ? h.color : "#cbd5e1", borderWidth: btn > 14 ? 2 : 1 }}
                                 aria-label={`Toggle ${h.name} day ${d}`}
                               >
-                                {done && <Check style={{ height: btn * 0.6, width: btn * 0.6 }} className="text-white" strokeWidth={3} />}
+                                {done && btn > 12 && <Check style={{ height: btn * 0.7, width: btn * 0.7 }} className="text-white" strokeWidth={3} />}
                               </button>
                             </td>
                           );
                         })}
-                        <td className="px-2 py-1.5 text-center bg-slate-50 border-l border-slate-200 sticky right-0">
-                          <div className="font-semibold text-slate-900 text-xs">{doneCount}/{h.month_goal}</div>
-                          <div className="text-[10px] text-slate-500">{Math.min(pct, 999)}%</div>
+                        <td className="px-1 py-1 text-center bg-slate-50 border-l border-slate-200 sticky right-0">
+                          <div className="font-semibold text-slate-900 text-[10px] leading-tight">{doneCount}/{h.month_goal}</div>
+                          <div className="text-[9px] text-slate-500 leading-tight">{Math.min(pct, 999)}%</div>
                         </td>
                       </tr>
                     );
                   })}
                   {Array.from({ length: Math.max(0, 12 - habits.length) }).map((_, i) => (
                     <tr key={`empty-${i}`} className="border-t border-slate-100">
-                      <td className="px-2 py-1.5 sticky left-0 bg-white border-r border-slate-200 z-10">
+                      <td className="px-1.5 py-1 sticky left-0 bg-white border-r border-slate-200 z-10">
                         <button
                           onClick={() => setAddOpen(true)}
-                          className="flex items-center gap-1.5 w-full text-left text-slate-400 hover:text-blue-600 text-xs"
+                          className="flex items-center gap-1 w-full text-left text-slate-400 hover:text-blue-600 text-[11px]"
                           title="Add habit"
                         >
                           <Plus className="h-3 w-3" />
-                          <span className="truncate">Add habit</span>
+                          <span className="truncate">Add</span>
                         </button>
                       </td>
                       {days.map((d) => {
-                        const btn = Math.max(18, cellSize - 8);
+                        const btn = Math.max(8, cellSize - 4);
                         return (
-                          <td key={d} style={{ minWidth: cellSize }} className="px-0 py-1 text-center">
-                            <div
-                              className="rounded-md border border-dashed border-slate-200 mx-auto"
-                              style={{ height: btn, width: btn }}
-                            />
+                          <td key={d} style={{ width: cellSize, minWidth: cellSize }} className="px-0 py-0.5 text-center">
+                            <div className="rounded-sm border border-dashed border-slate-200 mx-auto" style={{ height: btn, width: btn }} />
                           </td>
                         );
                       })}
-                      <td className="px-2 py-1.5 text-center bg-slate-50/50 border-l border-slate-200 sticky right-0">
+                      <td className="px-1 py-1 text-center bg-slate-50/50 border-l border-slate-200 sticky right-0">
                         <div className="text-[10px] text-slate-300">—</div>
                       </td>
                     </tr>
@@ -385,6 +407,11 @@ function Index() {
                 <RingCard key={i} label={`Week ${i + 1}`} completed={dones} goal={possible} color={weekColors[i % 5]} />
               );
             })}
+          </div>
+
+          {/* Trading-style progress chart */}
+          <div className="mt-4">
+            <TradingChart completions={allCompletions} habitCount={habits.length} />
           </div>
         </SheetContent>
       </Sheet>
@@ -611,19 +638,19 @@ function EditHabitDialog({ habit, onSave }: { habit: Habit; onSave: (patch: Part
   );
 }
 
-// ============ To-Do Panel (saved locally per user) ============
-type Todo = { id: string; text: string; done: boolean; createdAt: number };
+// ============ To-Do Panel (with date tracking + trash) ============
+type Todo = { id: string; text: string; done: boolean; createdAt: number; completedAt?: number | null; trashedAt?: number | null };
+
+const fmtDate = (ts: number) => new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 function TodoPanel({ userId, onChange }: { userId: string; onChange: () => void }) {
   const key = `todos:${userId}`;
   const [todos, setTodos] = useState<Todo[]>([]);
   const [text, setText] = useState("");
+  const [showTrash, setShowTrash] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw) setTodos(JSON.parse(raw));
-    } catch {}
+    try { const raw = localStorage.getItem(key); if (raw) setTodos(JSON.parse(raw)); } catch {}
   }, [key]);
 
   const persist = (next: Todo[]) => {
@@ -637,65 +664,87 @@ function TodoPanel({ userId, onChange }: { userId: string; onChange: () => void 
     persist([{ id: crypto.randomUUID(), text: text.trim(), done: false, createdAt: Date.now() }, ...todos]);
     setText("");
   };
-  const toggle = (id: string) => persist(todos.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
-  const remove = (id: string) => persist(todos.filter((t) => t.id !== id));
-  const clearDone = () => persist(todos.filter((t) => !t.done));
+  const toggle = (id: string) => persist(todos.map((t) => t.id === id ? { ...t, done: !t.done, completedAt: !t.done ? Date.now() : null } : t));
+  const trash = (id: string) => persist(todos.map((t) => t.id === id ? { ...t, trashedAt: Date.now() } : t));
+  const restore = (id: string) => persist(todos.map((t) => t.id === id ? { ...t, trashedAt: null } : t));
+  const purge = (id: string) => persist(todos.filter((t) => t.id !== id));
 
-  const remaining = todos.filter((t) => !t.done).length;
+  const active = todos.filter((t) => !t.trashedAt);
+  const trashed = todos.filter((t) => t.trashedAt);
+  const remaining = active.filter((t) => !t.done).length;
 
   return (
     <div className="mt-4 space-y-3">
       <div className="flex gap-2">
-        <Input
-          placeholder="Add a task…"
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
-        />
+        <Input placeholder="Add a task…" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") add(); }} />
         <Button onClick={add} className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /></Button>
       </div>
       <div className="flex items-center justify-between text-xs text-slate-500">
-        <span>{remaining} remaining · {todos.length} total</span>
-        {todos.some((t) => t.done) && (
-          <button className="text-red-500 hover:underline" onClick={clearDone}>Clear completed</button>
-        )}
+        <span>{remaining} remaining · {active.length} total</span>
+        <button className="text-slate-600 hover:underline flex items-center gap-1" onClick={() => setShowTrash((s) => !s)}>
+          <Archive className="h-3 w-3" /> Trash ({trashed.length})
+        </button>
       </div>
       <div className="space-y-2">
-        {todos.length === 0 && <div className="text-center text-sm text-slate-400 py-8">No tasks yet. Add one above.</div>}
-        {todos.map((t) => (
-          <div key={t.id} className="flex items-center gap-2 bg-white border border-slate-200 rounded-md px-2 py-2">
-            <button
-              onClick={() => toggle(t.id)}
-              className={`h-5 w-5 rounded border-2 grid place-content-center shrink-0 ${t.done ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}
-              aria-label="Toggle"
-            >
+        {active.length === 0 && <div className="text-center text-sm text-slate-400 py-8">No tasks yet.</div>}
+        {active.map((t) => (
+          <div key={t.id} className="flex items-start gap-2 bg-white border border-slate-200 rounded-md px-2 py-2">
+            <button onClick={() => toggle(t.id)} className={`h-5 w-5 rounded border-2 grid place-content-center shrink-0 mt-0.5 ${t.done ? "bg-emerald-500 border-emerald-500" : "border-slate-300"}`}>
               {t.done && <Check className="h-3 w-3 text-white" strokeWidth={3} />}
             </button>
-            <span className={`flex-1 text-sm ${t.done ? "line-through text-slate-400" : "text-slate-800"}`}>{t.text}</span>
-            <button onClick={() => remove(t.id)} className="text-slate-300 hover:text-red-500">
-              <X className="h-4 w-4" />
+            <div className="flex-1 min-w-0">
+              <div className={`text-sm ${t.done ? "line-through text-slate-400" : "text-slate-800"}`}>{t.text}</div>
+              <div className="text-[10px] text-slate-400 mt-0.5">
+                Added {fmtDate(t.createdAt)}{t.completedAt ? ` · Done ${fmtDate(t.completedAt)}` : ""}
+              </div>
+            </div>
+            <button onClick={() => trash(t.id)} className="text-slate-300 hover:text-red-500 mt-0.5" title="Move to Trash">
+              <Trash2 className="h-4 w-4" />
             </button>
           </div>
         ))}
       </div>
+      {showTrash && (
+        <div className="border-t border-slate-200 pt-3 mt-3">
+          <div className="text-xs font-semibold text-slate-600 mb-2">Trash</div>
+          {trashed.length === 0 ? (
+            <div className="text-center text-xs text-slate-400 py-4">Trash is empty</div>
+          ) : (
+            <div className="space-y-2">
+              {trashed.map((t) => (
+                <div key={t.id} className="flex items-start gap-2 bg-slate-100 border border-slate-200 rounded-md px-2 py-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm text-slate-600 line-through">{t.text}</div>
+                    <div className="text-[10px] text-slate-400">Trashed {fmtDate(t.trashedAt!)}</div>
+                  </div>
+                  <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => restore(t.id)}>
+                    <RotateCcw className="h-3 w-3 mr-1" />Restore
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600" onClick={() => purge(t.id)} title="Permanently delete">
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-// ============ Daily Schedule Panel ============
-type ScheduleItem = { id: string; time: string; title: string };
+// ============ Daily Schedule Panel (with date tracking + trash) ============
+type ScheduleItem = { id: string; time: string; title: string; createdAt: number; trashedAt?: number | null };
 
 function SchedulePanel({ userId, onChange }: { userId: string; onChange: () => void }) {
   const key = `schedule:${userId}`;
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [time, setTime] = useState("09:00");
   const [title, setTitle] = useState("");
+  const [showTrash, setShowTrash] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(key);
-      if (raw) setItems(JSON.parse(raw));
-    } catch {}
+    try { const raw = localStorage.getItem(key); if (raw) setItems(JSON.parse(raw)); } catch {}
   }, [key]);
 
   const persist = (next: ScheduleItem[]) => {
@@ -707,35 +756,215 @@ function SchedulePanel({ userId, onChange }: { userId: string; onChange: () => v
 
   const add = () => {
     if (!title.trim()) return;
-    persist([...items, { id: crypto.randomUUID(), time, title: title.trim() }]);
+    persist([...items, { id: crypto.randomUUID(), time, title: title.trim(), createdAt: Date.now() }]);
     setTitle("");
   };
-  const remove = (id: string) => persist(items.filter((i) => i.id !== id));
+  const trash = (id: string) => persist(items.map((i) => i.id === id ? { ...i, trashedAt: Date.now() } : i));
+  const restore = (id: string) => persist(items.map((i) => i.id === id ? { ...i, trashedAt: null } : i));
+  const purge = (id: string) => persist(items.filter((i) => i.id !== id));
+
+  const active = items.filter((i) => !i.trashedAt);
+  const trashed = items.filter((i) => i.trashedAt);
 
   return (
     <div className="mt-4 space-y-3 max-w-2xl mx-auto">
       <div className="flex gap-2">
         <Input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-28" />
-        <Input
-          placeholder="What's planned?"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") add(); }}
-        />
+        <Input placeholder="What's planned?" value={title} onChange={(e) => setTitle(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") add(); }} />
         <Button onClick={add} className="bg-blue-600 hover:bg-blue-700"><Plus className="h-4 w-4" /></Button>
       </div>
+      <div className="flex justify-end text-xs">
+        <button className="text-slate-600 hover:underline flex items-center gap-1" onClick={() => setShowTrash((s) => !s)}>
+          <Archive className="h-3 w-3" /> Trash ({trashed.length})
+        </button>
+      </div>
       <div className="space-y-2">
-        {items.length === 0 && <div className="text-center text-sm text-slate-400 py-8">No schedule items. Add your first one above.</div>}
-        {items.map((i) => (
+        {active.length === 0 && <div className="text-center text-sm text-slate-400 py-8">No schedule items yet.</div>}
+        {active.map((i) => (
           <div key={i.id} className="flex items-center gap-3 bg-white border border-slate-200 rounded-md px-3 py-2">
             <div className="font-mono text-sm font-semibold text-blue-600 w-16 shrink-0">{i.time}</div>
-            <div className="flex-1 text-sm text-slate-800">{i.title}</div>
-            <button onClick={() => remove(i.id)} className="text-slate-300 hover:text-red-500">
-              <X className="h-4 w-4" />
+            <div className="flex-1 min-w-0">
+              <div className="text-sm text-slate-800">{i.title}</div>
+              <div className="text-[10px] text-slate-400">Added {fmtDate(i.createdAt)}</div>
+            </div>
+            <button onClick={() => trash(i.id)} className="text-slate-300 hover:text-red-500" title="Trash">
+              <Trash2 className="h-4 w-4" />
             </button>
           </div>
         ))}
       </div>
+      {showTrash && (
+        <div className="border-t border-slate-200 pt-3">
+          <div className="text-xs font-semibold text-slate-600 mb-2">Trash</div>
+          {trashed.length === 0 ? (
+            <div className="text-center text-xs text-slate-400 py-4">Trash is empty</div>
+          ) : (
+            <div className="space-y-2">
+              {trashed.map((i) => (
+                <div key={i.id} className="flex items-center gap-2 bg-slate-100 border border-slate-200 rounded-md px-3 py-2">
+                  <div className="font-mono text-xs text-slate-500 w-16 shrink-0">{i.time}</div>
+                  <div className="flex-1 text-sm text-slate-600 line-through truncate">{i.title}</div>
+                  <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => restore(i.id)}>
+                    <RotateCcw className="h-3 w-3 mr-1" />Restore
+                  </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-red-600" onClick={() => purge(i.id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
+  );
+}
+
+// ============ Trading-style Progress Chart ============
+type Range = "D" | "W" | "M" | "Y";
+type Mode = "line" | "candle";
+
+function TradingChart({ completions, habitCount }: { completions: Completion[]; habitCount: number }) {
+  const [range, setRange] = useState<Range>("M");
+  const [mode, setMode] = useState<Mode>("line");
+
+  const data = useMemo(() => {
+    // Group completions by day
+    const byDay = new Map<string, number>();
+    for (const c of completions) byDay.set(c.date, (byDay.get(c.date) ?? 0) + 1);
+
+    const today = new Date();
+    const buckets: { label: string; values: number[] }[] = [];
+
+    if (range === "D") {
+      // Last 30 days, each bucket = 1 day
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(today); d.setDate(today.getDate() - i);
+        const key = d.toISOString().slice(0, 10);
+        buckets.push({ label: `${d.getDate()}/${d.getMonth() + 1}`, values: [byDay.get(key) ?? 0] });
+      }
+    } else if (range === "W") {
+      // Last 12 weeks
+      for (let i = 11; i >= 0; i--) {
+        const end = new Date(today); end.setDate(today.getDate() - i * 7);
+        const vals: number[] = [];
+        for (let j = 6; j >= 0; j--) {
+          const d = new Date(end); d.setDate(end.getDate() - j);
+          vals.push(byDay.get(d.toISOString().slice(0, 10)) ?? 0);
+        }
+        buckets.push({ label: `W${12 - i}`, values: vals });
+      }
+    } else if (range === "M") {
+      // Last 12 months
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const end = new Date(today.getFullYear(), today.getMonth() - i + 1, 0);
+        const vals: number[] = [];
+        for (let dd = new Date(d); dd <= end; dd.setDate(dd.getDate() + 1)) {
+          vals.push(byDay.get(dd.toISOString().slice(0, 10)) ?? 0);
+        }
+        buckets.push({ label: MONTHS[d.getMonth()].slice(0, 3), values: vals });
+      }
+    } else {
+      // Last 5 years
+      for (let i = 4; i >= 0; i--) {
+        const y = today.getFullYear() - i;
+        const start = new Date(y, 0, 1);
+        const end = new Date(y, 11, 31);
+        const vals: number[] = [];
+        for (let dd = new Date(start); dd <= end; dd.setDate(dd.getDate() + 1)) {
+          vals.push(byDay.get(dd.toISOString().slice(0, 10)) ?? 0);
+        }
+        buckets.push({ label: String(y), values: vals });
+      }
+    }
+
+    return buckets.map((b, idx, arr) => {
+      const sum = b.values.reduce((a, v) => a + v, 0);
+      const avg = b.values.length ? sum / b.values.length : 0;
+      const high = Math.max(0, ...b.values);
+      const low = Math.min(...(b.values.length ? b.values : [0]));
+      const open = idx > 0 ? arr[idx - 1].values.reduce((a, v) => a + v, 0) / Math.max(1, arr[idx - 1].values.length) : avg;
+      const close = avg;
+      const up = close >= open;
+      return { label: b.label, sum, avg: +avg.toFixed(2), open: +open.toFixed(2), close: +close.toFixed(2), high, low, up };
+    });
+  }, [completions, range]);
+
+  const ranges: { v: Range; l: string }[] = [
+    { v: "D", l: "Day" }, { v: "W", l: "Week" }, { v: "M", l: "Month" }, { v: "Y", l: "Year" },
+  ];
+
+  const last = data[data.length - 1];
+  const prev = data[data.length - 2];
+  const delta = last && prev ? last.close - prev.close : 0;
+  const deltaPct = prev && prev.close > 0 ? (delta / prev.close) * 100 : 0;
+  const up = delta >= 0;
+
+  return (
+    <Card className="bg-slate-900 text-white border-slate-800 p-3">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-emerald-400" />
+          <span className="font-semibold text-sm">Habit Performance</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {ranges.map((r) => (
+            <button key={r.v} onClick={() => setRange(r.v)} className={`text-[10px] px-2 py-1 rounded ${range === r.v ? "bg-emerald-500 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>{r.l}</button>
+          ))}
+          <span className="w-1" />
+          <button onClick={() => setMode("line")} className={`text-[10px] px-2 py-1 rounded ${mode === "line" ? "bg-blue-500 text-white" : "bg-slate-800 text-slate-300"}`}>Line</button>
+          <button onClick={() => setMode("candle")} className={`text-[10px] px-2 py-1 rounded ${mode === "candle" ? "bg-blue-500 text-white" : "bg-slate-800 text-slate-300"}`}>Candle</button>
+        </div>
+      </div>
+
+      {last && (
+        <div className="flex items-baseline gap-2 mb-2">
+          <span className="text-2xl font-bold tabular-nums">{last.close.toFixed(1)}</span>
+          <span className={`text-xs font-semibold ${up ? "text-emerald-400" : "text-red-400"}`}>
+            {up ? "▲" : "▼"} {Math.abs(delta).toFixed(2)} ({deltaPct.toFixed(1)}%)
+          </span>
+          <span className="text-[10px] text-slate-400 ml-auto">avg done / day · {habitCount} habits</span>
+        </div>
+      )}
+
+      <div style={{ width: "100%", height: 200 }}>
+        <ResponsiveContainer>
+          {mode === "line" ? (
+            <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="trGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.6} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} />
+              <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} />
+              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 6, fontSize: 11 }} />
+              <Area type="monotone" dataKey="close" stroke="#10b981" strokeWidth={2} fill="url(#trGrad)" />
+            </AreaChart>
+          ) : (
+            <ComposedChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} />
+              <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} />
+              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 6, fontSize: 11 }} />
+              {/* Wick: low→high */}
+              <Bar dataKey={(d: any) => [d.low, d.high]} barSize={2} fill="#64748b" />
+              {/* Body: open→close, colored by up/down */}
+              <Bar dataKey={(d: any) => [Math.min(d.open, d.close), Math.max(d.open, d.close)]} barSize={10}>
+                {data.map((d, i) => (
+                  <Cell key={i} fill={d.up ? "#10b981" : "#ef4444"} />
+                ))}
+              </Bar>
+              <ReferenceLine y={0} stroke="#334155" />
+            </ComposedChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+      <div className="text-[10px] text-slate-400 mt-2">
+        {range === "D" ? "Last 30 days" : range === "W" ? "Last 12 weeks" : range === "M" ? "Last 12 months" : "Last 5 years"} ·
+        {mode === "candle" ? " open/high/low/close per period" : " close = avg completions/day"}
+      </div>
+    </Card>
   );
 }
