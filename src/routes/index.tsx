@@ -264,11 +264,14 @@ function Index() {
             <h2 className="font-semibold text-slate-900 text-sm sm:text-base">Daily Habits — {MONTHS[month]} {year}</h2>
             <div className="flex items-center gap-1">
               <span className="text-[10px] text-slate-500 hidden sm:inline mr-1">{habits.length} active{archivedHabits.length > 0 && ` · ${archivedHabits.length} trash`}</span>
-              <Button variant="outline" size="icon" className="h-7 w-7" title="Zoom out" onClick={() => setCellSize((s) => Math.max(22, s - 4))}>
+              <Button variant={fitMode ? "default" : "outline"} size="icon" className="h-7 w-7" title="Fit all dates to screen" onClick={() => setFitMode((f) => !f)}>
+                <Maximize2 className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="outline" size="icon" className="h-7 w-7" title="Zoom out" onClick={() => { setFitMode(false); setCellSize((s) => Math.max(10, s - 4)); }}>
                 <ZoomOut className="h-3.5 w-3.5" />
               </Button>
               <span className="text-[10px] text-slate-500 w-7 text-center">{cellSize}</span>
-              <Button variant="outline" size="icon" className="h-7 w-7" title="Zoom in" onClick={() => setCellSize((s) => Math.min(56, s + 4))}>
+              <Button variant="outline" size="icon" className="h-7 w-7" title="Zoom in" onClick={() => { setFitMode(false); setCellSize((s) => Math.min(56, s + 4)); }}>
                 <ZoomIn className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -276,21 +279,20 @@ function Index() {
           {loadingData ? (
             <div className="p-8 text-center text-slate-500 text-sm">Loading…</div>
           ) : (
-            // Always horizontal: Habits = ROWS, Dates = COLUMNS (laptop spreadsheet style)
-            <div className="overflow-auto max-h-[78vh]">
-              <table className="text-sm border-collapse">
+            <div className={fitMode ? "overflow-x-hidden overflow-y-auto max-h-[78vh]" : "overflow-auto max-h-[78vh]"}>
+              <table className={`text-sm border-collapse ${fitMode ? "w-full table-fixed" : ""}`}>
                 <thead className="bg-slate-50 sticky top-0 z-10">
                   <tr>
-                    <th className="text-left font-medium text-slate-600 px-2 py-2 sticky left-0 bg-slate-50 min-w-[150px] z-20 border-r border-slate-200">Habit</th>
+                    <th className="text-left font-medium text-slate-600 px-1.5 py-2 sticky left-0 bg-slate-50 z-20 border-r border-slate-200" style={{ width: fitMode ? 80 : undefined, minWidth: fitMode ? 80 : 150 }}>Habit</th>
                     {days.map((d) => {
                       const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
                       return (
-                        <th key={d} style={{ minWidth: cellSize }} className={`px-0.5 py-2 text-center font-medium text-[10px] ${isToday ? "bg-blue-100 text-blue-700" : "text-slate-600"}`}>
-                          {String(d).padStart(2, "0")}
+                        <th key={d} style={{ width: cellSize, minWidth: cellSize }} className={`px-0 py-2 text-center font-medium text-[9px] ${isToday ? "bg-blue-100 text-blue-700" : "text-slate-600"}`}>
+                          {d}
                         </th>
                       );
                     })}
-                    <th className="px-2 py-2 text-center font-semibold text-slate-700 bg-slate-100 border-l border-slate-200 min-w-[70px] sticky right-0">Total</th>
+                    <th className="px-1 py-2 text-center font-semibold text-slate-700 bg-slate-100 border-l border-slate-200 sticky right-0" style={{ width: fitMode ? 44 : undefined, minWidth: fitMode ? 44 : 70 }}>Σ</th>
                   </tr>
                 </thead>
                 <tbody>
