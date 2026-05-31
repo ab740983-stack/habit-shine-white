@@ -100,6 +100,28 @@ function Index() {
     })();
   }, [user, monthStart, monthEnd]);
 
+  // Load full history once for the trading chart
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data } = await supabase.from("habit_completions").select("habit_id,date").order("date");
+      setAllCompletions((data ?? []) as Completion[]);
+    })();
+  }, [user, completions.length]);
+
+  // Auto-fit cell size to viewport when fitMode is on
+  useEffect(() => {
+    if (!fitMode) return;
+    const compute = () => {
+      const avail = Math.min(window.innerWidth, 1280) - 160; // habit col + total col + padding
+      const size = Math.max(10, Math.floor(avail / daysInMonth));
+      setCellSize(size);
+    };
+    compute();
+    window.addEventListener("resize", compute);
+    return () => window.removeEventListener("resize", compute);
+  }, [fitMode, daysInMonth]);
+
   // Only count completions of ACTIVE habits — archived habit progress shows as 0
   const activeIds = useMemo(() => new Set(habits.map((h) => h.id)), [habits]);
   const activeCompletions = useMemo(() => completions.filter((c) => activeIds.has(c.habit_id)), [completions, activeIds]);
