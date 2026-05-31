@@ -301,66 +301,61 @@ function Index() {
                     const pct = h.month_goal > 0 ? Math.round((doneCount / h.month_goal) * 100) : 0;
                     return (
                       <tr key={h.id} className="border-t border-slate-100 hover:bg-slate-50/50">
-                        <td className="px-2 py-1.5 sticky left-0 bg-white border-r border-slate-200 z-10">
-                          <div className="flex items-center gap-1.5">
-                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: h.color }} />
-                            <span className="truncate max-w-[90px] font-medium text-slate-800 text-xs" title={h.name}>{h.name}</span>
-                            <div className="ml-auto flex items-center">
-                              <EditHabitDialog habit={h} onSave={(patch) => updateHabit(h.id, patch)} />
-                              <Button variant="ghost" size="icon" className="h-6 w-6 text-slate-300 hover:text-red-600" onClick={() => archiveHabit(h.id)} title="Move to Trash">
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </div>
+                        <td className="px-1.5 py-1 sticky left-0 bg-white border-r border-slate-200 z-10" style={{ width: fitMode ? 80 : undefined }}>
+                          <div className="flex items-center gap-1">
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ background: h.color }} />
+                            <span className="truncate font-medium text-slate-800 text-[11px] flex-1" title={h.name}>{h.name}</span>
+                            <EditHabitDialog habit={h} onSave={(patch) => updateHabit(h.id, patch)} />
+                            <Button variant="ghost" size="icon" className="h-5 w-5 text-slate-300 hover:text-red-600" onClick={() => archiveHabit(h.id)} title="Trash">
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
                           </div>
                         </td>
                         {days.map((d) => {
                           const done = isDone(h.id, d);
                           const isToday = d === today.getDate() && month === today.getMonth() && year === today.getFullYear();
-                          const btn = Math.max(18, cellSize - 8);
+                          const btn = Math.max(8, cellSize - 4);
                           return (
-                            <td key={d} style={{ minWidth: cellSize }} className={`px-0 py-1 text-center ${isToday ? "bg-blue-50/50" : ""}`}>
+                            <td key={d} style={{ width: cellSize, minWidth: cellSize }} className={`px-0 py-0.5 text-center ${isToday ? "bg-blue-50/50" : ""}`}>
                               <button
                                 onClick={() => toggle(h.id, d)}
-                                className="rounded-md border-2 grid place-content-center transition-all hover:scale-110 mx-auto"
-                                style={{ height: btn, width: btn, background: done ? h.color : "transparent", borderColor: done ? h.color : "#cbd5e1" }}
+                                className="rounded-sm border grid place-content-center transition-all hover:scale-110 mx-auto"
+                                style={{ height: btn, width: btn, background: done ? h.color : "transparent", borderColor: done ? h.color : "#cbd5e1", borderWidth: btn > 14 ? 2 : 1 }}
                                 aria-label={`Toggle ${h.name} day ${d}`}
                               >
-                                {done && <Check style={{ height: btn * 0.6, width: btn * 0.6 }} className="text-white" strokeWidth={3} />}
+                                {done && btn > 12 && <Check style={{ height: btn * 0.7, width: btn * 0.7 }} className="text-white" strokeWidth={3} />}
                               </button>
                             </td>
                           );
                         })}
-                        <td className="px-2 py-1.5 text-center bg-slate-50 border-l border-slate-200 sticky right-0">
-                          <div className="font-semibold text-slate-900 text-xs">{doneCount}/{h.month_goal}</div>
-                          <div className="text-[10px] text-slate-500">{Math.min(pct, 999)}%</div>
+                        <td className="px-1 py-1 text-center bg-slate-50 border-l border-slate-200 sticky right-0">
+                          <div className="font-semibold text-slate-900 text-[10px] leading-tight">{doneCount}/{h.month_goal}</div>
+                          <div className="text-[9px] text-slate-500 leading-tight">{Math.min(pct, 999)}%</div>
                         </td>
                       </tr>
                     );
                   })}
                   {Array.from({ length: Math.max(0, 12 - habits.length) }).map((_, i) => (
                     <tr key={`empty-${i}`} className="border-t border-slate-100">
-                      <td className="px-2 py-1.5 sticky left-0 bg-white border-r border-slate-200 z-10">
+                      <td className="px-1.5 py-1 sticky left-0 bg-white border-r border-slate-200 z-10">
                         <button
                           onClick={() => setAddOpen(true)}
-                          className="flex items-center gap-1.5 w-full text-left text-slate-400 hover:text-blue-600 text-xs"
+                          className="flex items-center gap-1 w-full text-left text-slate-400 hover:text-blue-600 text-[11px]"
                           title="Add habit"
                         >
                           <Plus className="h-3 w-3" />
-                          <span className="truncate">Add habit</span>
+                          <span className="truncate">Add</span>
                         </button>
                       </td>
                       {days.map((d) => {
-                        const btn = Math.max(18, cellSize - 8);
+                        const btn = Math.max(8, cellSize - 4);
                         return (
-                          <td key={d} style={{ minWidth: cellSize }} className="px-0 py-1 text-center">
-                            <div
-                              className="rounded-md border border-dashed border-slate-200 mx-auto"
-                              style={{ height: btn, width: btn }}
-                            />
+                          <td key={d} style={{ width: cellSize, minWidth: cellSize }} className="px-0 py-0.5 text-center">
+                            <div className="rounded-sm border border-dashed border-slate-200 mx-auto" style={{ height: btn, width: btn }} />
                           </td>
                         );
                       })}
-                      <td className="px-2 py-1.5 text-center bg-slate-50/50 border-l border-slate-200 sticky right-0">
+                      <td className="px-1 py-1 text-center bg-slate-50/50 border-l border-slate-200 sticky right-0">
                         <div className="text-[10px] text-slate-300">—</div>
                       </td>
                     </tr>
