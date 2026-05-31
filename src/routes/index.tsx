@@ -42,7 +42,9 @@ function Index() {
   const [todoOpen, setTodoOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [cellSize, setCellSize] = useState<number>(34); // px
+  const [fitMode, setFitMode] = useState<boolean>(true); // auto-fit all dates in viewport
   const [addOpen, setAddOpen] = useState(false);
+  const [allCompletions, setAllCompletions] = useState<Completion[]>([]); // for trading chart
 
   // Swipe gestures:
   //  - swipe LEFT from right edge  → open Progress
