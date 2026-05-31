@@ -408,6 +408,11 @@ function Index() {
               );
             })}
           </div>
+
+          {/* Trading-style progress chart */}
+          <div className="mt-4">
+            <TradingChart completions={allCompletions} habitCount={habits.length} />
+          </div>
         </SheetContent>
       </Sheet>
 
