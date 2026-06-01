@@ -972,3 +972,136 @@ function PerDayChart({ habits, completions, days, month, year }: { habits: Habit
   );
 }
 
+
+// ============ Trading-style Progress Chart ============
+type Range = "D" | "W" | "M" | "Y";
+
+function TradingChart({ completions, habitCount }: { completions: Completion[]; habitCount: number }) {
+  const [range, setRange] = useState<Range>("M");
+  const [mode, setMode] = useState<"line" | "candle">("line");
+
+  const data = useMemo(() => {
+    const byDay = new Map<string, number>();
+    for (const c of completions) byDay.set(c.date, (byDay.get(c.date) ?? 0) + 1);
+    const today = new Date();
+    const buckets: { label: string; values: number[] }[] = [];
+
+    if (range === "D") {
+      for (let i = 29; i >= 0; i--) {
+        const d = new Date(today); d.setDate(today.getDate() - i);
+        buckets.push({ label: `${d.getDate()}/${d.getMonth() + 1}`, values: [byDay.get(d.toISOString().slice(0, 10)) ?? 0] });
+      }
+    } else if (range === "W") {
+      for (let i = 11; i >= 0; i--) {
+        const end = new Date(today); end.setDate(today.getDate() - i * 7);
+        const vals: number[] = [];
+        for (let j = 6; j >= 0; j--) {
+          const d = new Date(end); d.setDate(end.getDate() - j);
+          vals.push(byDay.get(d.toISOString().slice(0, 10)) ?? 0);
+        }
+        buckets.push({ label: `W${12 - i}`, values: vals });
+      }
+    } else if (range === "M") {
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
+        const end = new Date(today.getFullYear(), today.getMonth() - i + 1, 0);
+        const vals: number[] = [];
+        for (let dd = new Date(d); dd <= end; dd.setDate(dd.getDate() + 1)) {
+          vals.push(byDay.get(dd.toISOString().slice(0, 10)) ?? 0);
+        }
+        buckets.push({ label: MONTHS[d.getMonth()].slice(0, 3), values: vals });
+      }
+    } else {
+      for (let i = 4; i >= 0; i--) {
+        const y = today.getFullYear() - i;
+        const start = new Date(y, 0, 1);
+        const end = new Date(y, 11, 31);
+        const vals: number[] = [];
+        for (let dd = new Date(start); dd <= end; dd.setDate(dd.getDate() + 1)) {
+          vals.push(byDay.get(dd.toISOString().slice(0, 10)) ?? 0);
+        }
+        buckets.push({ label: String(y), values: vals });
+      }
+    }
+
+    return buckets.map((b, idx, arr) => {
+      const sum = b.values.reduce((a, v) => a + v, 0);
+      const avg = b.values.length ? sum / b.values.length : 0;
+      const high = Math.max(0, ...b.values);
+      const low = Math.min(...(b.values.length ? b.values : [0]));
+      const open = idx > 0 ? arr[idx - 1].values.reduce((a, v) => a + v, 0) / Math.max(1, arr[idx - 1].values.length) : avg;
+      const close = avg;
+      return { label: b.label, sum, avg: +avg.toFixed(2), open: +open.toFixed(2), close: +close.toFixed(2), high, low, up: close >= open };
+    });
+  }, [completions, range]);
+
+  const ranges: { v: Range; l: string }[] = [
+    { v: "D", l: "Day" }, { v: "W", l: "Week" }, { v: "M", l: "Month" }, { v: "Y", l: "Year" },
+  ];
+  const last = data[data.length - 1];
+  const prev = data[data.length - 2];
+  const delta = last && prev ? last.close - prev.close : 0;
+  const deltaPct = prev && prev.close > 0 ? (delta / prev.close) * 100 : 0;
+  const up = delta >= 0;
+
+  return (
+    <Card className="bg-slate-900 text-white border-slate-800 p-3">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <TrendingUp className="h-4 w-4 text-emerald-400" />
+          <span className="font-semibold text-sm">Habit Performance</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {ranges.map((r) => (
+            <button key={r.v} onClick={() => setRange(r.v)} className={`text-[10px] px-2 py-1 rounded ${range === r.v ? "bg-emerald-500 text-white" : "bg-slate-800 text-slate-300 hover:bg-slate-700"}`}>{r.l}</button>
+          ))}
+          <span className="w-1" />
+          <button onClick={() => setMode("line")} className={`text-[10px] px-2 py-1 rounded ${mode === "line" ? "bg-blue-500 text-white" : "bg-slate-800 text-slate-300"}`}>Line</button>
+          <button onClick={() => setMode("candle")} className={`text-[10px] px-2 py-1 rounded ${mode === "candle" ? "bg-blue-500 text-white" : "bg-slate-800 text-slate-300"}`}>Candle</button>
+        </div>
+      </div>
+      {last && (
+        <div className="flex items-baseline gap-2 mb-2">
+          <span className="text-2xl font-bold tabular-nums">{last.close.toFixed(1)}</span>
+          <span className={`text-xs font-semibold ${up ? "text-emerald-400" : "text-red-400"}`}>
+            {up ? "▲" : "▼"} {Math.abs(delta).toFixed(2)} ({deltaPct.toFixed(1)}%)
+          </span>
+          <span className="text-[10px] text-slate-400 ml-auto">avg done / day · {habitCount} habits</span>
+        </div>
+      )}
+      <div style={{ width: "100%", height: 200 }}>
+        <ResponsiveContainer>
+          {mode === "line" ? (
+            <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="trGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity={0.6} />
+                  <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} />
+              <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} />
+              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 6, fontSize: 11 }} />
+              <Area type="monotone" dataKey="close" stroke="#10b981" strokeWidth={2} fill="url(#trGrad)" />
+            </AreaChart>
+          ) : (
+            <ComposedChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} />
+              <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} />
+              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 6, fontSize: 11 }} />
+              <Bar dataKey={(d: any) => [d.low, d.high]} barSize={2} fill="#64748b" />
+              <Bar dataKey={(d: any) => [Math.min(d.open, d.close), Math.max(d.open, d.close)]} barSize={10}>
+                {data.map((d, i) => <Cell key={i} fill={d.up ? "#10b981" : "#ef4444"} />)}
+              </Bar>
+              <ReferenceLine y={0} stroke="#334155" />
+            </ComposedChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+      <div className="text-[10px] text-slate-400 mt-2">
+        {range === "D" ? "Last 30 days" : range === "W" ? "Last 12 weeks" : range === "M" ? "Last 12 months" : "Last 5 years"} ·
+        {mode === "candle" ? " open/high/low/close per period" : " close = avg completions/day"}
+      </div>
+    </Card>
+  );
+}
