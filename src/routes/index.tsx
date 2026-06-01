@@ -413,6 +413,12 @@ function Index() {
           <div className="mt-4">
             <TradingChart completions={allCompletions} habitCount={habits.length} />
           </div>
+
+          {/* Per-habit & per-day candle/line breakdowns for current month */}
+          <div className="mt-4 space-y-3">
+            <PerHabitChart habits={habits} completions={activeCompletions} days={days} />
+            <PerDayChart habits={habits} completions={activeCompletions} days={days} month={month} year={year} />
+          </div>
         </SheetContent>
       </Sheet>
 
