@@ -88,6 +88,69 @@ export type Database = {
         }
         Relationships: []
       }
+      schedule_items: {
+        Row: {
+          created_at: string
+          id: string
+          time: string
+          title: string
+          trashed_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          time: string
+          title: string
+          trashed_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          time?: string
+          title?: string
+          trashed_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      todos: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          done: boolean
+          id: string
+          text: string
+          trashed_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          done?: boolean
+          id?: string
+          text: string
+          trashed_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          done?: boolean
+          id?: string
+          text?: string
+          trashed_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

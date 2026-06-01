@@ -413,6 +413,12 @@ function Index() {
           <div className="mt-4">
             <TradingChart completions={allCompletions} habitCount={habits.length} />
           </div>
+
+          {/* Per-habit & per-day candle/line breakdowns for current month */}
+          <div className="mt-4 space-y-3">
+            <PerHabitChart habits={habits} completions={activeCompletions} days={days} />
+            <PerDayChart habits={habits} completions={activeCompletions} days={days} month={month} year={year} />
+          </div>
         </SheetContent>
       </Sheet>
 
@@ -638,39 +644,57 @@ function EditHabitDialog({ habit, onSave }: { habit: Habit; onSave: (patch: Part
   );
 }
 
-// ============ To-Do Panel (with date tracking + trash) ============
-type Todo = { id: string; text: string; done: boolean; createdAt: number; completedAt?: number | null; trashedAt?: number | null };
+// ============ To-Do Panel (cloud synced + trash) ============
+type Todo = { id: string; text: string; done: boolean; created_at: string; completed_at: string | null; trashed_at: string | null };
 
-const fmtDate = (ts: number) => new Date(ts).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+const fmtDate = (iso: string | number) => new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 function TodoPanel({ userId, onChange }: { userId: string; onChange: () => void }) {
-  const key = `todos:${userId}`;
   const [todos, setTodos] = useState<Todo[]>([]);
   const [text, setText] = useState("");
   const [showTrash, setShowTrash] = useState(false);
 
   useEffect(() => {
-    try { const raw = localStorage.getItem(key); if (raw) setTodos(JSON.parse(raw)); } catch {}
-  }, [key]);
+    (async () => {
+      const { data } = await supabase.from("todos").select("*").order("created_at", { ascending: false });
+      setTodos((data ?? []) as Todo[]);
+    })();
+  }, [userId]);
 
-  const persist = (next: Todo[]) => {
-    setTodos(next);
-    try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
+  const add = async () => {
+    if (!text.trim()) return;
+    const { data, error } = await supabase.from("todos").insert({ user_id: userId, text: text.trim(), done: false }).select().single();
+    if (error) return toast.error(error.message);
+    setTodos((p) => [data as Todo, ...p]);
+    setText(""); onChange();
+  };
+  const toggle = async (id: string) => {
+    const t = todos.find((x) => x.id === id); if (!t) return;
+    const next = !t.done;
+    const patch = { done: next, completed_at: next ? new Date().toISOString() : null };
+    setTodos((p) => p.map((x) => x.id === id ? { ...x, ...patch } : x));
+    await supabase.from("todos").update(patch).eq("id", id);
+    onChange();
+  };
+  const trash = async (id: string) => {
+    const ts = new Date().toISOString();
+    setTodos((p) => p.map((x) => x.id === id ? { ...x, trashed_at: ts } : x));
+    await supabase.from("todos").update({ trashed_at: ts }).eq("id", id);
+    onChange();
+  };
+  const restore = async (id: string) => {
+    setTodos((p) => p.map((x) => x.id === id ? { ...x, trashed_at: null } : x));
+    await supabase.from("todos").update({ trashed_at: null }).eq("id", id);
+    onChange();
+  };
+  const purge = async (id: string) => {
+    setTodos((p) => p.filter((x) => x.id !== id));
+    await supabase.from("todos").delete().eq("id", id);
     onChange();
   };
 
-  const add = () => {
-    if (!text.trim()) return;
-    persist([{ id: crypto.randomUUID(), text: text.trim(), done: false, createdAt: Date.now() }, ...todos]);
-    setText("");
-  };
-  const toggle = (id: string) => persist(todos.map((t) => t.id === id ? { ...t, done: !t.done, completedAt: !t.done ? Date.now() : null } : t));
-  const trash = (id: string) => persist(todos.map((t) => t.id === id ? { ...t, trashedAt: Date.now() } : t));
-  const restore = (id: string) => persist(todos.map((t) => t.id === id ? { ...t, trashedAt: null } : t));
-  const purge = (id: string) => persist(todos.filter((t) => t.id !== id));
-
-  const active = todos.filter((t) => !t.trashedAt);
-  const trashed = todos.filter((t) => t.trashedAt);
+  const active = todos.filter((t) => !t.trashed_at);
+  const trashed = todos.filter((t) => t.trashed_at);
   const remaining = active.filter((t) => !t.done).length;
 
   return (
@@ -695,7 +719,7 @@ function TodoPanel({ userId, onChange }: { userId: string; onChange: () => void 
             <div className="flex-1 min-w-0">
               <div className={`text-sm ${t.done ? "line-through text-slate-400" : "text-slate-800"}`}>{t.text}</div>
               <div className="text-[10px] text-slate-400 mt-0.5">
-                Added {fmtDate(t.createdAt)}{t.completedAt ? ` · Done ${fmtDate(t.completedAt)}` : ""}
+                Added {fmtDate(t.created_at)}{t.completed_at ? ` · Done ${fmtDate(t.completed_at)}` : ""}
               </div>
             </div>
             <button onClick={() => trash(t.id)} className="text-slate-300 hover:text-red-500 mt-0.5" title="Move to Trash">
@@ -715,7 +739,7 @@ function TodoPanel({ userId, onChange }: { userId: string; onChange: () => void 
                 <div key={t.id} className="flex items-start gap-2 bg-slate-100 border border-slate-200 rounded-md px-2 py-2">
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-slate-600 line-through">{t.text}</div>
-                    <div className="text-[10px] text-slate-400">Trashed {fmtDate(t.trashedAt!)}</div>
+                    <div className="text-[10px] text-slate-400">Trashed {fmtDate(t.trashed_at!)}</div>
                   </div>
                   <Button variant="outline" size="sm" className="h-7 px-2" onClick={() => restore(t.id)}>
                     <RotateCcw className="h-3 w-3 mr-1" />Restore
@@ -733,38 +757,48 @@ function TodoPanel({ userId, onChange }: { userId: string; onChange: () => void 
   );
 }
 
-// ============ Daily Schedule Panel (with date tracking + trash) ============
-type ScheduleItem = { id: string; time: string; title: string; createdAt: number; trashedAt?: number | null };
+// ============ Daily Schedule Panel (cloud synced + trash) ============
+type ScheduleItem = { id: string; time: string; title: string; created_at: string; trashed_at: string | null };
 
 function SchedulePanel({ userId, onChange }: { userId: string; onChange: () => void }) {
-  const key = `schedule:${userId}`;
   const [items, setItems] = useState<ScheduleItem[]>([]);
   const [time, setTime] = useState("09:00");
   const [title, setTitle] = useState("");
   const [showTrash, setShowTrash] = useState(false);
 
   useEffect(() => {
-    try { const raw = localStorage.getItem(key); if (raw) setItems(JSON.parse(raw)); } catch {}
-  }, [key]);
+    (async () => {
+      const { data } = await supabase.from("schedule_items").select("*").order("time");
+      setItems((data ?? []) as ScheduleItem[]);
+    })();
+  }, [userId]);
 
-  const persist = (next: ScheduleItem[]) => {
-    const sorted = [...next].sort((a, b) => a.time.localeCompare(b.time));
-    setItems(sorted);
-    try { localStorage.setItem(key, JSON.stringify(sorted)); } catch {}
+  const add = async () => {
+    if (!title.trim()) return;
+    const { data, error } = await supabase.from("schedule_items").insert({ user_id: userId, time, title: title.trim() }).select().single();
+    if (error) return toast.error(error.message);
+    setItems((p) => [...p, data as ScheduleItem].sort((a, b) => a.time.localeCompare(b.time)));
+    setTitle(""); onChange();
+  };
+  const trash = async (id: string) => {
+    const ts = new Date().toISOString();
+    setItems((p) => p.map((x) => x.id === id ? { ...x, trashed_at: ts } : x));
+    await supabase.from("schedule_items").update({ trashed_at: ts }).eq("id", id);
+    onChange();
+  };
+  const restore = async (id: string) => {
+    setItems((p) => p.map((x) => x.id === id ? { ...x, trashed_at: null } : x));
+    await supabase.from("schedule_items").update({ trashed_at: null }).eq("id", id);
+    onChange();
+  };
+  const purge = async (id: string) => {
+    setItems((p) => p.filter((x) => x.id !== id));
+    await supabase.from("schedule_items").delete().eq("id", id);
     onChange();
   };
 
-  const add = () => {
-    if (!title.trim()) return;
-    persist([...items, { id: crypto.randomUUID(), time, title: title.trim(), createdAt: Date.now() }]);
-    setTitle("");
-  };
-  const trash = (id: string) => persist(items.map((i) => i.id === id ? { ...i, trashedAt: Date.now() } : i));
-  const restore = (id: string) => persist(items.map((i) => i.id === id ? { ...i, trashedAt: null } : i));
-  const purge = (id: string) => persist(items.filter((i) => i.id !== id));
-
-  const active = items.filter((i) => !i.trashedAt);
-  const trashed = items.filter((i) => i.trashedAt);
+  const active = items.filter((i) => !i.trashed_at);
+  const trashed = items.filter((i) => i.trashed_at);
 
   return (
     <div className="mt-4 space-y-3 max-w-2xl mx-auto">
@@ -785,7 +819,7 @@ function SchedulePanel({ userId, onChange }: { userId: string; onChange: () => v
             <div className="font-mono text-sm font-semibold text-blue-600 w-16 shrink-0">{i.time}</div>
             <div className="flex-1 min-w-0">
               <div className="text-sm text-slate-800">{i.title}</div>
-              <div className="text-[10px] text-slate-400">Added {fmtDate(i.createdAt)}</div>
+              <div className="text-[10px] text-slate-400">Added {fmtDate(i.created_at)}</div>
             </div>
             <button onClick={() => trash(i.id)} className="text-slate-300 hover:text-red-500" title="Trash">
               <Trash2 className="h-4 w-4" />
@@ -820,31 +854,144 @@ function SchedulePanel({ userId, onChange }: { userId: string; onChange: () => v
   );
 }
 
+// ============ Per-Habit Chart: "Ek habit kitne din ki" ============
+function PerHabitChart({ habits, completions, days }: { habits: Habit[]; completions: Completion[]; days: number[] }) {
+  const [mode, setMode] = useState<"line" | "candle">("line");
+  const data = useMemo(() => {
+    return habits.map((h) => {
+      const doneDays = completions.filter((c) => c.habit_id === h.id).length;
+      // candle: open = prev habit close, close = doneDays, high/low based on goal
+      return { label: h.name.length > 8 ? h.name.slice(0, 8) + "…" : h.name, value: doneDays, goal: h.month_goal, color: h.color };
+    });
+  }, [habits, completions]);
+
+  const candleData = data.map((d, i, arr) => {
+    const open = i > 0 ? arr[i - 1].value : d.value;
+    const close = d.value;
+    return { ...d, open, close, high: Math.max(open, close, d.goal), low: Math.min(open, close), up: close >= open };
+  });
+
+  return (
+    <Card className="bg-slate-900 text-white border-slate-800 p-3">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <span className="font-semibold text-sm">Ek habit kitne din ki</span>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setMode("line")} className={`text-[10px] px-2 py-1 rounded ${mode === "line" ? "bg-blue-500 text-white" : "bg-slate-800 text-slate-300"}`}>Line</button>
+          <button onClick={() => setMode("candle")} className={`text-[10px] px-2 py-1 rounded ${mode === "candle" ? "bg-blue-500 text-white" : "bg-slate-800 text-slate-300"}`}>Candle</button>
+        </div>
+      </div>
+      <div style={{ width: "100%", height: 180 }}>
+        <ResponsiveContainer>
+          {mode === "line" ? (
+            <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="phGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.6} />
+                  <stop offset="100%" stopColor="#3b82f6" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 9 }} axisLine={{ stroke: "#334155" }} />
+              <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} allowDecimals={false} />
+              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 6, fontSize: 11 }} formatter={(v: number) => [`${v} din`, "Done"]} />
+              <Area type="monotone" dataKey="value" stroke="#3b82f6" strokeWidth={2} fill="url(#phGrad)" />
+            </AreaChart>
+          ) : (
+            <ComposedChart data={candleData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 9 }} axisLine={{ stroke: "#334155" }} />
+              <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} allowDecimals={false} />
+              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 6, fontSize: 11 }} />
+              <Bar dataKey={(d: any) => [d.low, d.high]} barSize={2} fill="#64748b" />
+              <Bar dataKey={(d: any) => [Math.min(d.open, d.close), Math.max(d.open, d.close)]} barSize={12}>
+                {candleData.map((d, i) => <Cell key={i} fill={d.up ? "#10b981" : "#ef4444"} />)}
+              </Bar>
+            </ComposedChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+      <div className="text-[10px] text-slate-400 mt-1">{days.length} din ke month me — har habit kitne din complete ki</div>
+    </Card>
+  );
+}
+
+// ============ Per-Day Chart: "Ek din me kitni habits ki" ============
+function PerDayChart({ habits, completions, days, month, year }: { habits: Habit[]; completions: Completion[]; days: number[]; month: number; year: number }) {
+  const [mode, setMode] = useState<"line" | "candle">("line");
+  const data = useMemo(() => {
+    return days.map((d) => {
+      const ds = `${year}-${String(month + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const cnt = completions.filter((c) => c.date === ds).length;
+      return { label: String(d), value: cnt, total: habits.length };
+    });
+  }, [days, completions, habits.length, month, year]);
+
+  const candleData = data.map((d, i, arr) => {
+    const open = i > 0 ? arr[i - 1].value : d.value;
+    const close = d.value;
+    return { ...d, open, close, high: Math.max(open, close, d.total), low: Math.min(open, close), up: close >= open };
+  });
+
+  return (
+    <Card className="bg-slate-900 text-white border-slate-800 p-3">
+      <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+        <span className="font-semibold text-sm">Ek din me kitni habits ki</span>
+        <div className="flex items-center gap-1">
+          <button onClick={() => setMode("line")} className={`text-[10px] px-2 py-1 rounded ${mode === "line" ? "bg-blue-500 text-white" : "bg-slate-800 text-slate-300"}`}>Line</button>
+          <button onClick={() => setMode("candle")} className={`text-[10px] px-2 py-1 rounded ${mode === "candle" ? "bg-blue-500 text-white" : "bg-slate-800 text-slate-300"}`}>Candle</button>
+        </div>
+      </div>
+      <div style={{ width: "100%", height: 180 }}>
+        <ResponsiveContainer>
+          {mode === "line" ? (
+            <AreaChart data={data} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <defs>
+                <linearGradient id="pdGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.6} />
+                  <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 9 }} axisLine={{ stroke: "#334155" }} interval={2} />
+              <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} allowDecimals={false} />
+              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 6, fontSize: 11 }} formatter={(v: number) => [`${v} habits`, "Done"]} />
+              <Area type="monotone" dataKey="value" stroke="#f59e0b" strokeWidth={2} fill="url(#pdGrad)" />
+            </AreaChart>
+          ) : (
+            <ComposedChart data={candleData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+              <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 9 }} axisLine={{ stroke: "#334155" }} interval={2} />
+              <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} allowDecimals={false} />
+              <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 6, fontSize: 11 }} />
+              <Bar dataKey={(d: any) => [d.low, d.high]} barSize={2} fill="#64748b" />
+              <Bar dataKey={(d: any) => [Math.min(d.open, d.close), Math.max(d.open, d.close)]} barSize={6}>
+                {candleData.map((d, i) => <Cell key={i} fill={d.up ? "#10b981" : "#ef4444"} />)}
+              </Bar>
+            </ComposedChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+      <div className="text-[10px] text-slate-400 mt-1">Har date — kitni habits complete (max {habits.length})</div>
+    </Card>
+  );
+}
+
+
 // ============ Trading-style Progress Chart ============
 type Range = "D" | "W" | "M" | "Y";
-type Mode = "line" | "candle";
 
 function TradingChart({ completions, habitCount }: { completions: Completion[]; habitCount: number }) {
   const [range, setRange] = useState<Range>("M");
-  const [mode, setMode] = useState<Mode>("line");
+  const [mode, setMode] = useState<"line" | "candle">("line");
 
   const data = useMemo(() => {
-    // Group completions by day
     const byDay = new Map<string, number>();
     for (const c of completions) byDay.set(c.date, (byDay.get(c.date) ?? 0) + 1);
-
     const today = new Date();
     const buckets: { label: string; values: number[] }[] = [];
 
     if (range === "D") {
-      // Last 30 days, each bucket = 1 day
       for (let i = 29; i >= 0; i--) {
         const d = new Date(today); d.setDate(today.getDate() - i);
-        const key = d.toISOString().slice(0, 10);
-        buckets.push({ label: `${d.getDate()}/${d.getMonth() + 1}`, values: [byDay.get(key) ?? 0] });
+        buckets.push({ label: `${d.getDate()}/${d.getMonth() + 1}`, values: [byDay.get(d.toISOString().slice(0, 10)) ?? 0] });
       }
     } else if (range === "W") {
-      // Last 12 weeks
       for (let i = 11; i >= 0; i--) {
         const end = new Date(today); end.setDate(today.getDate() - i * 7);
         const vals: number[] = [];
@@ -855,7 +1002,6 @@ function TradingChart({ completions, habitCount }: { completions: Completion[]; 
         buckets.push({ label: `W${12 - i}`, values: vals });
       }
     } else if (range === "M") {
-      // Last 12 months
       for (let i = 11; i >= 0; i--) {
         const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
         const end = new Date(today.getFullYear(), today.getMonth() - i + 1, 0);
@@ -866,7 +1012,6 @@ function TradingChart({ completions, habitCount }: { completions: Completion[]; 
         buckets.push({ label: MONTHS[d.getMonth()].slice(0, 3), values: vals });
       }
     } else {
-      // Last 5 years
       for (let i = 4; i >= 0; i--) {
         const y = today.getFullYear() - i;
         const start = new Date(y, 0, 1);
@@ -886,15 +1031,13 @@ function TradingChart({ completions, habitCount }: { completions: Completion[]; 
       const low = Math.min(...(b.values.length ? b.values : [0]));
       const open = idx > 0 ? arr[idx - 1].values.reduce((a, v) => a + v, 0) / Math.max(1, arr[idx - 1].values.length) : avg;
       const close = avg;
-      const up = close >= open;
-      return { label: b.label, sum, avg: +avg.toFixed(2), open: +open.toFixed(2), close: +close.toFixed(2), high, low, up };
+      return { label: b.label, sum, avg: +avg.toFixed(2), open: +open.toFixed(2), close: +close.toFixed(2), high, low, up: close >= open };
     });
   }, [completions, range]);
 
   const ranges: { v: Range; l: string }[] = [
     { v: "D", l: "Day" }, { v: "W", l: "Week" }, { v: "M", l: "Month" }, { v: "Y", l: "Year" },
   ];
-
   const last = data[data.length - 1];
   const prev = data[data.length - 2];
   const delta = last && prev ? last.close - prev.close : 0;
@@ -917,7 +1060,6 @@ function TradingChart({ completions, habitCount }: { completions: Completion[]; 
           <button onClick={() => setMode("candle")} className={`text-[10px] px-2 py-1 rounded ${mode === "candle" ? "bg-blue-500 text-white" : "bg-slate-800 text-slate-300"}`}>Candle</button>
         </div>
       </div>
-
       {last && (
         <div className="flex items-baseline gap-2 mb-2">
           <span className="text-2xl font-bold tabular-nums">{last.close.toFixed(1)}</span>
@@ -927,7 +1069,6 @@ function TradingChart({ completions, habitCount }: { completions: Completion[]; 
           <span className="text-[10px] text-slate-400 ml-auto">avg done / day · {habitCount} habits</span>
         </div>
       )}
-
       <div style={{ width: "100%", height: 200 }}>
         <ResponsiveContainer>
           {mode === "line" ? (
@@ -948,13 +1089,9 @@ function TradingChart({ completions, habitCount }: { completions: Completion[]; 
               <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} />
               <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={{ stroke: "#334155" }} />
               <Tooltip contentStyle={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 6, fontSize: 11 }} />
-              {/* Wick: low→high */}
               <Bar dataKey={(d: any) => [d.low, d.high]} barSize={2} fill="#64748b" />
-              {/* Body: open→close, colored by up/down */}
               <Bar dataKey={(d: any) => [Math.min(d.open, d.close), Math.max(d.open, d.close)]} barSize={10}>
-                {data.map((d, i) => (
-                  <Cell key={i} fill={d.up ? "#10b981" : "#ef4444"} />
-                ))}
+                {data.map((d, i) => <Cell key={i} fill={d.up ? "#10b981" : "#ef4444"} />)}
               </Bar>
               <ReferenceLine y={0} stroke="#334155" />
             </ComposedChart>
