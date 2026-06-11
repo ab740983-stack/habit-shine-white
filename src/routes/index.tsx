@@ -282,6 +282,42 @@ function Index() {
             <div className={fitMode ? "overflow-x-hidden overflow-y-auto max-h-[78vh]" : "overflow-auto max-h-[78vh]"}>
               <table className={`text-sm border-collapse ${fitMode ? "w-full table-fixed" : ""}`}>
                 <thead className="bg-slate-50 sticky top-0 z-10">
+                  {/* Daily totals line chart row — aligned with date columns */}
+                  <tr>
+                    <th className="text-left text-[9px] font-medium text-slate-500 px-1.5 sticky left-0 bg-slate-50 z-20 border-r border-slate-200 align-bottom pb-1" style={{ width: fitMode ? 80 : undefined, minWidth: fitMode ? 80 : 150 }}>
+                      Daily<br/>total
+                    </th>
+                    <th colSpan={days.length} className="p-0 bg-white border-b border-slate-200">
+                      {(() => {
+                        const totals = days.map((d) => habits.filter((h) => isDone(h.id, d)).length);
+                        const max = Math.max(1, habits.length || 1, ...totals);
+                        const H = 56;
+                        const W = cellSize * days.length;
+                        const pts = totals.map((v, i) => {
+                          const x = i * cellSize + cellSize / 2;
+                          const y = H - 6 - (v / max) * (H - 12);
+                          return { x, y, v };
+                        });
+                        const path = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+                        return (
+                          <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block" style={{ width: "100%", height: H }}>
+                            <defs>
+                              <linearGradient id="dailyFill" x1="0" x2="0" y1="0" y2="1">
+                                <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.35" />
+                                <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+                              </linearGradient>
+                            </defs>
+                            <path d={`${path} L${W - cellSize / 2},${H} L${cellSize / 2},${H} Z`} fill="url(#dailyFill)" />
+                            <path d={path} fill="none" stroke="#3b82f6" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+                            {pts.map((p, i) => (
+                              <circle key={i} cx={p.x} cy={p.y} r={p.v > 0 ? 1.8 : 0} fill="#3b82f6" />
+                            ))}
+                          </svg>
+                        );
+                      })()}
+                    </th>
+                    <th className="bg-slate-100 border-l border-slate-200 sticky right-0" style={{ width: fitMode ? 44 : undefined, minWidth: fitMode ? 44 : 70 }} />
+                  </tr>
                   <tr>
                     <th className="text-left font-medium text-slate-600 px-1.5 py-2 sticky left-0 bg-slate-50 z-20 border-r border-slate-200" style={{ width: fitMode ? 80 : undefined, minWidth: fitMode ? 80 : 150 }}>Habit</th>
                     {days.map((d) => {
